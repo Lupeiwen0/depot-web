@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { carts, lineItems } from "@/db/depot-schema";
 import { eq } from "drizzle-orm";
 import HeaderClient from "./HeaderClient";
-import CartDrawer from "./CartDrawer";
+import CartDrawer, { type CartItem } from "./CartDrawer";
 
 export default async function Header() {
   const session = await auth.api.getSession({
@@ -13,7 +13,7 @@ export default async function Header() {
 
   let userRole: "admin" | "buyer" | null = null;
   let cartItemCount = 0;
-  let cartItems = [];
+  let cartItems: CartItem[] = [];
 
   if (session?.user) {
     const userRecord = await db.query.user.findFirst({

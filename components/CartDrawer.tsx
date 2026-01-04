@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCartDrawer } from "@/contexts/CartDrawerContext";
 
-type CartItem = {
+export type CartItem = {
   id: number;
   productId: number;
   cartId: number | null;
@@ -88,9 +88,7 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
             购物车
           </SheetTitle>
           <SheetDescription>
-            {items.length > 0
-              ? `共 ${totalQuantity} 件商品`
-              : "购物车是空的"}
+            {items.length > 0 ? `共 ${totalQuantity} 件商品` : "购物车是空的"}
           </SheetDescription>
         </SheetHeader>
 
