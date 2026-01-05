@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import TagSelector from "./TagSelector";
 
 type Product = {
   id: number;
@@ -18,6 +19,7 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
+  tags?: string[] | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -33,6 +35,9 @@ export default function ProductFormDialog({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    product?.tags || []
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -137,6 +142,11 @@ export default function ProductFormDialog({
               placeholder="0.00"
             />
           </div>
+
+          <TagSelector
+            selectedTags={selectedTags}
+            onChange={setSelectedTags}
+          />
 
           <DialogFooter>
             <Button

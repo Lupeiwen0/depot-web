@@ -10,14 +10,10 @@ import {
   Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { MembershipButton } from "@/components/MembershipButton";
 
 export const dynamic = "force-dynamic";
-
-// 会员支付链接
-const MEMBERSHIP_PAYMENT_LINK =
-  "https://buy.stripe.com/test_00w7sN3LUbQbfHu0Dv1oI04";
 
 interface Coupon {
   id: number;
@@ -145,12 +141,7 @@ export default async function UserCouponsPage() {
                   </p>
                 </div>
               </div>
-              <Link href={MEMBERSHIP_PAYMENT_LINK}>
-                <Button className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
-                  <Crown className="h-4 w-4" />
-                  立即开通会员
-                </Button>
-              </Link>
+              <MembershipButton />
             </div>
           </div>
         )}
@@ -214,14 +205,7 @@ export default async function UserCouponsPage() {
             <p className="text-muted-foreground mb-6">
               订阅会员即可每月获得 30 张优惠券
             </p>
-            {!isMember && (
-              <Link href={MEMBERSHIP_PAYMENT_LINK}>
-                <Button className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
-                  <Crown className="h-4 w-4" />
-                  立即开通会员
-                </Button>
-              </Link>
-            )}
+            {!isMember && <MembershipButton />}
           </div>
         ) : (
           <div className="grid gap-4">

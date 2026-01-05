@@ -253,6 +253,8 @@ export async function POST(request: NextRequest) {
       const price = await stripe.prices.retrieve(priceId);
 
       // 创建订阅 Checkout Session
+      // 注意：已指定 customer，邮箱会从 customer 获取
+      // customer_update.name 和 customer_update.address 设为 'never' 可防止用户修改
       const checkoutSession = await stripe.checkout.sessions.create({
         customer: stripeCustomer.stripeCustomerId,
         client_reference_id: session.user.id,

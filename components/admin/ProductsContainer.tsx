@@ -11,6 +11,7 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
+  tags?: string[] | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 };

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import Link from "next/link";
+import TagSelector from "./TagSelector";
 
 type Product = {
   id: number;
@@ -11,6 +12,7 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
+  tags?: string[] | null;
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -19,6 +21,9 @@ export default function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    product?.tags || []
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -118,6 +123,11 @@ export default function ProductForm({ product }: { product?: Product }) {
             placeholder="0.00"
           />
         </div>
+
+        <TagSelector
+          selectedTags={selectedTags}
+          onChange={setSelectedTags}
+        />
 
         <div className="flex gap-4">
           <button

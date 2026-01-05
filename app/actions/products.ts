@@ -16,6 +16,7 @@ const productSchema = z.object({
     const num = parseFloat(val);
     return !isNaN(num) && num >= 0.01;
   }, "价格必须大于等于 0.01"),
+  tags: z.array(z.string()).optional(),
 });
 
 async function checkAdmin() {
@@ -45,11 +46,23 @@ export async function createProduct(formData: FormData) {
       return { success: false, error: adminCheck.error };
     }
 
+    // 解析标签
+    const tagsJson = formData.get("tags");
+    let tags: string[] = [];
+    if (tagsJson && typeof tagsJson === "string") {
+      try {
+        tags = JSON.parse(tagsJson);
+      } catch {
+        tags = [];
+      }
+    }
+
     const validatedData = productSchema.parse({
       title: formData.get("title"),
       description: formData.get("description") || undefined,
       imageUrl: formData.get("imageUrl") || undefined,
       price: formData.get("price"),
+      tags,
     });
 
     await db.insert(products).values({
@@ -57,6 +70,7 @@ export async function createProduct(formData: FormData) {
       description: validatedData.description || null,
       imageUrl: validatedData.imageUrl || null,
       price: validatedData.price,
+      tags: validatedData.tags || null,
     });
 
     revalidatePath("/admin/products");
@@ -78,11 +92,23 @@ export async function updateProduct(id: number, formData: FormData) {
       return { success: false, error: adminCheck.error };
     }
 
+    // 解析标签
+    const tagsJson = formData.get("tags");
+    let tags: string[] = [];
+    if (tagsJson && typeof tagsJson === "string") {
+      try {
+        tags = JSON.parse(tagsJson);
+      } catch {
+        tags = [];
+      }
+    }
+
     const validatedData = productSchema.parse({
       title: formData.get("title"),
       description: formData.get("description") || undefined,
       imageUrl: formData.get("imageUrl") || undefined,
       price: formData.get("price"),
+      tags,
     });
 
     await db
@@ -92,6 +118,7 @@ export async function updateProduct(id: number, formData: FormData) {
         description: validatedData.description || null,
         imageUrl: validatedData.imageUrl || null,
         price: validatedData.price,
+        tags: validatedData.tags || null,
         updatedAt: new Date(),
       })
       .where(eq(products.id, id));
@@ -126,5 +153,39 @@ export async function deleteProduct(id: number) {
       return { success: false, error: "该商品已被添加到购物车，无法删除" };
     }
     return { success: false, error: "删除商品失败" };
+  }
+}
+
+export async function toggleProductStatus(id: number) {
+  try {
+    const adminCheck = await checkAdmin();
+    if (!adminCheck.isAdmin) {
+      return { success: false, error: adminCheck.error };
+    }
+
+    // 查询当前状态
+    const product = await db.query.products.findFirst({
+      where: (products, { eq }) => eq(products.id, id),
+    });
+
+    if (!product) {
+      return { success: false, error: "商品不存在" };
+    }
+
+    // 切换状态
+    await db
+      .update(products)
+      .set({
+        isActive: !product.isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, id));
+
+    revalidatePath("/admin/products");
+    revalidatePath("/");
+    return { success: true };
+  } catch (error) {
+    console.error("Toggle product status error:", error);
+    return { success: false, error: "切换商品状态失败" };
   }
 }
