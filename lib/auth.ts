@@ -16,6 +16,16 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        required: true,
+        defaultValue: "buyer",
+        input: false, // 防止用户在注册时定义自己的角色
+      },
+    },
+  },
   session: {
     cookieCache: {
       enabled: true,
@@ -24,5 +34,5 @@ export const auth = betterAuth({
   },
 });
 
-export type Session = typeof auth.$Infer.Session.session;
+export type Session = typeof auth.$Infer.Session;
 export type User = typeof auth.$Infer.Session.user;
