@@ -51,8 +51,7 @@ export default function ProductFormDialog({
 
     if (result.success) {
       onOpenChange(false);
-      // 刷新页面以显示最新数据
-      window.location.reload();
+      // Server Action 已调用 revalidatePath，页面会自动更新
     } else {
       setError(result.error || "操作失败");
     }

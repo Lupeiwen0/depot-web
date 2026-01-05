@@ -9,7 +9,6 @@ import {
   Ban,
   CheckCircle,
   Trash2,
-  MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,18 +33,24 @@ export default function UserList({ users, currentUserId }: UserListProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const handleToggleStatus = async (userId: string, currentStatus: string) => {
-    const action = currentStatus === "active" ? "disable" : "enable";
-    const reason =
-      action === "disable"
-        ? prompt("请输入禁用原因（可选）:")
-        : undefined;
+    const newStatus = currentStatus === "active" ? "disabled" : "active";
+    let reason: string | null = null;
+
+    if (newStatus === "disabled") {
+      const inputReason = prompt("请输入禁用原因（可选）:");
+      // 用户点击取消时 prompt 返回 null
+      if (inputReason === null) {
+        return;
+      }
+      reason = inputReason || null;
+    }
 
     setLoadingId(userId);
     try {
       const res = await fetch(`/api/admin/users/${userId}/toggle-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason }),
+        body: JSON.stringify({ status: newStatus, reason }),
       });
 
       if (res.ok) {
@@ -97,6 +102,12 @@ export default function UserList({ users, currentUserId }: UserListProps) {
           icon: Ban,
           className: "bg-red-100 text-red-700",
         };
+      case "deleted":
+        return {
+          label: "已删除",
+          icon: Trash2,
+          className: "bg-gray-100 text-gray-500",
+        };
       default:
         return {
           label: status,
@@ -144,6 +155,7 @@ export default function UserList({ users, currentUserId }: UserListProps) {
               const StatusIcon = statusConfig.icon;
               const isCurrentUser = user.id === currentUserId;
               const isLoading = loadingId === user.id;
+              const isDeleted = user.status === "deleted";
 
               return (
                 <tr
@@ -208,7 +220,7 @@ export default function UserList({ users, currentUserId }: UserListProps) {
                     {new Date(user.createdAt).toLocaleDateString("zh-CN")}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {!isCurrentUser && (
+                    {!isCurrentUser && !isDeleted && (
                       <div className="flex items-center justify-end gap-2">
                         <Button
                           size="sm"

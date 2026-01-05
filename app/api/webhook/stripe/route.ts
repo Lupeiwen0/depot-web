@@ -148,14 +148,25 @@ async function handleCheckoutSessionCompleted(
     return;
   }
 
-  // 更新 payment 记录
+  // 更新 payment 记录（订阅 checkout.session.completed 通常没有 payment_intent）
+  const paymentUpdate: Partial<typeof payments.$inferInsert> = {
+    status: "succeeded",
+    updatedAt: new Date(),
+  };
+
+  if (session.payment_intent) {
+    paymentUpdate.stripePaymentIntentId = session.payment_intent as string;
+  }
+  if (session.invoice) {
+    paymentUpdate.stripeInvoiceId = session.invoice as string;
+  }
+  if (session.subscription) {
+    paymentUpdate.stripeSubscriptionId = session.subscription as string;
+  }
+
   await db
     .update(payments)
-    .set({
-      status: "succeeded",
-      stripePaymentIntentId: session.payment_intent as string,
-      updatedAt: new Date(),
-    })
+    .set(paymentUpdate)
     .where(eq(payments.stripeCheckoutSessionId, session.id));
 
   if (paymentType === "one_time") {
@@ -260,16 +271,18 @@ async function handleCheckoutSessionCompleted(
   } else if (paymentType === "subscription") {
     // 订阅支付 - 处理会员订阅
     const subscriptionId = session.subscription as string;
-    if (!subscriptionId) return;
-
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-
-    // 获取 price ID（可能是字符串或对象）
-    const subscriptionItem = subscription.items.data[0];
+    const stripeCustomerId = session.customer as string;
     const priceId =
-      typeof subscriptionItem.price === "string"
-        ? subscriptionItem.price
-        : subscriptionItem.price.id;
+      session.metadata?.priceId || "price_1SjBwxQEUxc7vavPBx2mdMp6";
+
+    if (!subscriptionId) {
+      console.error("No subscription id in checkout session", session.id);
+      return;
+    }
+    if (!stripeCustomerId) {
+      console.error("No customer id in checkout session", session.id);
+      return;
+    }
 
     // 创建或更新会员记录
     const existingMembership = await db.query.userMemberships.findFirst({
@@ -282,24 +295,14 @@ async function handleCheckoutSessionCompleted(
         .values({
           userId: userId,
           stripeSubscriptionId: subscriptionId,
-          stripeCustomerId: subscription.customer as string,
+          stripeCustomerId,
           stripePriceId: priceId,
           status: "active",
-          currentPeriodStart: new Date(
-            (subscription as any).current_period_start * 1000
-          ),
-          currentPeriodEnd: new Date(
-            (subscription as any).current_period_end * 1000
-          ),
         })
         .returning();
 
       // 首次订阅成功，立即发放优惠券
-      await createMembershipCoupons(
-        userId,
-        newMembership.id,
-        subscription.customer as string
-      );
+      await createMembershipCoupons(userId, newMembership.id, stripeCustomerId);
     }
   }
 }

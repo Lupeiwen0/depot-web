@@ -42,8 +42,16 @@ export async function POST(request: NextRequest) {
     // 兼容 type 和 paymentType 两种参数名
     const type = body.type || body.paymentType || "one_time";
     // 默认的成功和取消 URL
-    const successUrl = body.successUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = body.cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment/cancel`;
+    const successUrl =
+      body.successUrl ||
+      `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/payment/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl =
+      body.cancelUrl ||
+      `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/payment/cancel`;
 
     // 获取或创建 Stripe Customer
     let stripeCustomer = await db.query.userStripeCustomers.findFirst({
@@ -74,7 +82,15 @@ export async function POST(request: NextRequest) {
 
     if (type === "one_time") {
       // 一次性支付（购物车结算或订单支付）
-      let orderLineItems: Array<{ product: { title: string; description: string | null; imageUrl: string | null; price: string }; quantity: number }> = [];
+      let orderLineItems: Array<{
+        product: {
+          title: string;
+          description: string | null;
+          imageUrl: string | null;
+          price: string;
+        };
+        quantity: number;
+      }> = [];
       let metadataId: string;
       let metadataType: "cartId" | "orderId";
 
@@ -100,11 +116,16 @@ export async function POST(request: NextRequest) {
         }
 
         if (order.lineItems.length === 0) {
-          return NextResponse.json({ error: "Order is empty" }, { status: 400 });
+          return NextResponse.json(
+            { error: "Order is empty" },
+            { status: 400 }
+          );
         }
 
         // 检查订单是否已有成功支付
-        const successfulPayment = order.payments?.find(p => p.status === "succeeded");
+        const successfulPayment = order.payments?.find(
+          (p) => p.status === "succeeded"
+        );
         if (successfulPayment) {
           return NextResponse.json(
             { error: "Order has already been paid" },
@@ -113,11 +134,15 @@ export async function POST(request: NextRequest) {
         }
 
         // 检查是否有 pending 的支付记录，复用同一个 Stripe Session
-        const pendingPayment = order.payments?.find(p => p.status === "pending" && p.stripeCheckoutSessionId);
+        const pendingPayment = order.payments?.find(
+          (p) => p.status === "pending" && p.stripeCheckoutSessionId
+        );
         if (pendingPayment?.stripeCheckoutSessionId) {
           try {
             // 查询 Stripe Session 状态
-            const existingSession = await stripe.checkout.sessions.retrieve(pendingPayment.stripeCheckoutSessionId);
+            const existingSession = await stripe.checkout.sessions.retrieve(
+              pendingPayment.stripeCheckoutSessionId
+            );
             // Session 仍然有效（open 状态），复用该链接
             if (existingSession.status === "open" && existingSession.url) {
               return NextResponse.json({
@@ -222,7 +247,9 @@ export async function POST(request: NextRequest) {
       }
 
       // 创建 Checkout Session
-      const checkoutSession = await stripe.checkout.sessions.create(checkoutConfig);
+      const checkoutSession = await stripe.checkout.sessions.create(
+        checkoutConfig
+      );
 
       // 创建本地 payment 记录
       await db.insert(payments).values({
@@ -270,6 +297,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           userId: session.user.id,
           type: "subscription",
+          priceId,
         },
       });
 
@@ -291,7 +319,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ error: "Invalid payment type" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid payment type" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("Create session error:", error);
     return NextResponse.json(
