@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
+import { fetchInternalApi, fetchInternalApiWithAuth } from "@/lib/api-utils";
 import ProductReviews from "@/components/ProductReviews";
 import AddToCartButton from "./AddToCartButton";
 import { ChevronLeft, Star, ShoppingBag, Shield, Truck } from "lucide-react";
@@ -28,13 +29,7 @@ interface ProductPageProps {
 }
 
 async function getProductDetail(productId: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/products/${productId}`, {
-    cache: "no-store",
-  });
+  const res = await fetchInternalApi(`/api/products/${productId}`);
 
   if (!res.ok) {
     if (res.status === 404) {
@@ -47,15 +42,8 @@ async function getProductDetail(productId: string) {
 }
 
 async function getCartProductIds(cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
   try {
-    const res = await fetch(`${protocol}://${host}/api/cart/product-ids`, {
-      cache: "no-store",
-      headers: { cookie },
-    });
+    const res = await fetchInternalApiWithAuth("/api/cart/product-ids", cookie);
 
     if (!res.ok) {
       return [];

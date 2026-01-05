@@ -3,8 +3,7 @@
 import Image from "next/image";
 import { useSession } from "@/lib/auth-client";
 import { addToCart } from "@/app/actions/cart";
-import { useState, useRef } from "react";
-import { useCartAnimation } from "@/lib/use-cart-animation";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -25,7 +24,7 @@ type Product = {
   updatedAt: Date | string;
   // 新增字段
   tags?: string[] | null;
-  salesCount?: number | null;
+  salesCount?: number;
   averageRating?: string | null;
   reviewCount?: number | null;
 };
@@ -40,8 +39,6 @@ export default function ProductCard({
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const { animateToCart } = useCartAnimation();
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault(); // Prevent any parent link clicks if applicable
@@ -56,19 +53,8 @@ export default function ProductCard({
     try {
       const result = await addToCart(product.id);
       if (result.success) {
-        // 触发飞入动画
-        if (buttonRef.current) {
-          animateToCart(buttonRef.current, {
-            duration: 800,
-            onComplete: () => {
-              setMessage("已添加");
-              setTimeout(() => setMessage(""), 2000);
-            },
-          });
-        } else {
-          setMessage("已添加");
-          setTimeout(() => setMessage(""), 2000);
-        }
+        setMessage("已添加");
+        setTimeout(() => setMessage(""), 2000);
       } else {
         setMessage(result.error || "失败");
       }
@@ -80,7 +66,7 @@ export default function ProductCard({
   };
 
   return (
-    <Card className="flex flex-col group relative h-full overflow-hidden rounded-xl border-white/40 bg-white/60 backdrop-blur-md transition-all duration-500 hover:shadow-2xl hover:border-primary/20 hover:bg-white/80">
+    <Card className="flex flex-col group relative h-[480px] overflow-hidden rounded-xl border-white/40 bg-white/60 backdrop-blur-md transition-all duration-500 hover:shadow-2xl hover:border-primary/20 hover:bg-white/80">
       <CardHeader className="p-0">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-white/20">
           {product.imageUrl ? (
@@ -125,10 +111,10 @@ export default function ProductCard({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col gap-2 p-5">
+      <CardContent className="flex-1 flex flex-col gap-1.5 p-4">
         {/* 标签显示 */}
         {product.tags && product.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 -mt-1 mb-1">
+          <div className="flex flex-wrap gap-1 -mt-0.5 mb-0.5">
             {product.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
@@ -152,22 +138,27 @@ export default function ProductCard({
           </p>
         )}
 
-        {/* 评分和销量 */}
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          {product.averageRating && parseFloat(product.averageRating) > 0 && (
-            <span className="flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-              <span className="font-medium text-foreground">
-                {parseFloat(product.averageRating).toFixed(1)}
-              </span>
-              {product.reviewCount != null && product.reviewCount > 0 && (
-                <span>({product.reviewCount})</span>
-              )}
-            </span>
-          )}
-          {product.salesCount != null && product.salesCount > 0 && (
-            <span>已售 {product.salesCount}</span>
-          )}
+        {/* 评分和销量 - 左右布局 */}
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            {product.averageRating && parseFloat(product.averageRating) > 0 ? (
+              <>
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <span className="font-medium text-foreground">
+                  {parseFloat(product.averageRating).toFixed(1)}
+                </span>
+                {product.reviewCount != null && product.reviewCount > 0 && (
+                  <span>({product.reviewCount})</span>
+                )}
+              </>
+            ) : (
+              <>
+                <Star className="h-3.5 w-3.5 text-muted-foreground/30" />
+                <span className="font-medium text-muted-foreground">0.0</span>
+              </>
+            )}
+          </div>
+          <span>已售 {product.salesCount || 0}</span>
         </div>
 
         <div className="mt-2 flex items-baseline gap-1">
@@ -178,12 +169,11 @@ export default function ProductCard({
         </div>
       </CardContent>
 
-      <CardFooter className="p-5 pt-0">
+      <CardFooter className="p-4 pt-0">
         <Button
-          ref={buttonRef}
           onClick={handleAddToCart}
           disabled={loading}
-          className="w-full rounded-lg bg-primary/90 font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary hover:shadow-md active:scale-95 group-hover:translate-y-0 opacity-100 lg:opacity-0 lg:translate-y-4 lg:group-hover:opacity-100 lg:group-hover:translate-y-0 duration-300"
+          className="w-full rounded-lg bg-primary/90 font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary hover:shadow-md active:scale-95"
         >
           {loading ? (
             <span className="flex items-center gap-2">

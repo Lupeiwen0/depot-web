@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +25,10 @@ interface Product {
 }
 
 async function getProduct(productId: string, cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/admin/products/${productId}`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth(
+    `/api/admin/products/${productId}`,
+    cookie
+  );
 
   if (!res.ok) {
     if (res.status === 401) {

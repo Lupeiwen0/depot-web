@@ -22,9 +22,7 @@ export default function SortSelector() {
   const currentSort = searchParams.get("sortBy") || "sales";
   const currentOrder = searchParams.get("sortOrder") || "desc";
   const currentValue =
-    currentSort === "price"
-      ? `price-${currentOrder}`
-      : currentSort;
+    currentSort === "price" ? `price-${currentOrder}` : currentSort;
 
   const handleSort = useCallback(
     (value: string) => {
@@ -40,7 +38,7 @@ export default function SortSelector() {
       params.set("page", "1");
 
       startTransition(() => {
-        router.push(`${pathname}?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
       });
     },
     [pathname, router, searchParams]

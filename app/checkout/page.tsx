@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import CheckoutForm from "@/components/CheckoutForm";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,21 +29,28 @@ interface CheckoutData {
   error?: string;
 }
 
-async function getCheckoutData(cookie: string): Promise<CheckoutData & { unauthorized?: boolean }> {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/checkout`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+async function getCheckoutData(
+  cookie: string
+): Promise<CheckoutData & { unauthorized?: boolean }> {
+  const res = await fetchInternalApiWithAuth("/api/checkout", cookie);
 
   if (!res.ok) {
     if (res.status === 401) {
-      return { unauthorized: true, userEmail: "", cartItems: [], coupons: [], total: 0 };
+      return {
+        unauthorized: true,
+        userEmail: "",
+        cartItems: [],
+        coupons: [],
+        total: 0,
+      };
     }
-    return { error: "Failed to load checkout data", userEmail: "", cartItems: [], coupons: [], total: 0 };
+    return {
+      error: "Failed to load checkout data",
+      userEmail: "",
+      cartItems: [],
+      coupons: [],
+      total: 0,
+    };
   }
 
   return await res.json();
@@ -87,9 +95,7 @@ export default async function CheckoutPage() {
                   </span>
                   <span className="font-medium flex-shrink-0">
                     ¥
-                    {(parseFloat(item.productPrice) * item.quantity).toFixed(
-                      2
-                    )}
+                    {(parseFloat(item.productPrice) * item.quantity).toFixed(2)}
                   </span>
                 </div>
               ))}

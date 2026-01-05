@@ -1,14 +1,23 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Ticket, Clock, CheckCircle, XCircle, ChevronLeft, Crown } from "lucide-react";
+import {
+  Ticket,
+  Clock,
+  CheckCircle,
+  XCircle,
+  ChevronLeft,
+  Crown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
 // 会员支付链接
-const MEMBERSHIP_PAYMENT_LINK = "https://buy.stripe.com/test_00w7sN3LUbQbfHu0Dv1oI04";
+const MEMBERSHIP_PAYMENT_LINK =
+  "https://buy.stripe.com/test_00w7sN3LUbQbfHu0Dv1oI04";
 
 interface Coupon {
   id: number;
@@ -29,14 +38,7 @@ interface Membership {
 }
 
 async function getCouponsData(cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/user/coupons`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth("/api/user/coupons", cookie);
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -49,14 +51,7 @@ async function getCouponsData(cookie: string) {
 }
 
 async function getMembershipData(cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/user/membership`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth("/api/user/membership", cookie);
 
   if (!res.ok) {
     return { isMember: false, membership: null };
@@ -142,7 +137,9 @@ export default async function UserCouponsPage() {
                   <Crown className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-900">开通会员，享更多优惠</h3>
+                  <h3 className="font-semibold text-slate-900">
+                    开通会员，享更多优惠
+                  </h3>
                   <p className="text-sm text-muted-foreground">
                     成为会员每月可获得 30 张 10% 折扣优惠券
                   </p>
@@ -173,7 +170,12 @@ export default async function UserCouponsPage() {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  会员有效期至 {membership.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("zh-CN") : "未知"}
+                  会员有效期至{" "}
+                  {membership.currentPeriodEnd
+                    ? new Date(membership.currentPeriodEnd).toLocaleDateString(
+                        "zh-CN"
+                      )
+                    : "未知"}
                 </p>
               </div>
             </div>
@@ -188,7 +190,9 @@ export default async function UserCouponsPage() {
           </div>
           <div className="bg-white rounded-xl p-4 border shadow-sm">
             <p className="text-sm text-green-600">可用</p>
-            <p className="text-2xl font-bold text-green-600">{stats.available}</p>
+            <p className="text-2xl font-bold text-green-600">
+              {stats.available}
+            </p>
           </div>
           <div className="bg-white rounded-xl p-4 border shadow-sm">
             <p className="text-sm text-muted-foreground">已使用</p>

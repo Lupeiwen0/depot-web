@@ -21,7 +21,9 @@ export default function TagFilter({ tags }: TagFilterProps) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const selectedTags = (searchParams.get("tags") || "").split(",").filter(Boolean);
+  const selectedTags = (searchParams.get("tags") || "")
+    .split(",")
+    .filter(Boolean);
 
   const toggleTag = useCallback(
     (tagName: string) => {
@@ -42,7 +44,7 @@ export default function TagFilter({ tags }: TagFilterProps) {
       params.set("page", "1"); // 筛选时重置页码
 
       startTransition(() => {
-        router.push(`${pathname}?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
       });
     },
     [pathname, router, searchParams, selectedTags]
@@ -53,7 +55,7 @@ export default function TagFilter({ tags }: TagFilterProps) {
     params.delete("tags");
     params.set("page", "1");
     startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
     });
   }, [pathname, router, searchParams]);
 

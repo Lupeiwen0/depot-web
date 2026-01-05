@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Users, ChevronLeft } from "lucide-react";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import UserList from "./UserList";
 
 export const dynamic = "force-dynamic";
@@ -34,23 +35,34 @@ interface UsersData {
 }
 
 async function getUsersData(cookie: string): Promise<UsersData> {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/admin/users?pageSize=100`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth(
+    "/api/admin/users?pageSize=100",
+    cookie
+  );
 
   if (!res.ok) {
     if (res.status === 401) {
-      return { unauthorized: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+      return {
+        unauthorized: true,
+        currentUserId: "",
+        users: [],
+        pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
+      };
     }
     if (res.status === 403) {
-      return { forbidden: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+      return {
+        forbidden: true,
+        currentUserId: "",
+        users: [],
+        pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
+      };
     }
-    return { error: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+    return {
+      error: true,
+      currentUserId: "",
+      users: [],
+      pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
+    };
   }
 
   return await res.json();
@@ -111,9 +123,7 @@ export default async function AdminUsersPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">用户管理</h1>
-              <p className="text-sm text-muted-foreground">
-                管理平台用户账号
-              </p>
+              <p className="text-sm text-muted-foreground">管理平台用户账号</p>
             </div>
           </div>
         </div>

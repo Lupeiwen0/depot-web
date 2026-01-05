@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import OrderItemReview from "./OrderItemReview";
 import PayOrderButton from "../PayOrderButton";
 
@@ -45,14 +46,7 @@ interface Order {
 }
 
 async function getOrderDetail(orderId: string, cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/user/orders/${orderId}`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth(`/api/user/orders/${orderId}`, cookie);
 
   if (!res.ok) {
     if (res.status === 401) {

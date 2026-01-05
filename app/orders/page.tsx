@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import DeleteOrderButton from "./DeleteOrderButton";
 import PayOrderButton from "./PayOrderButton";
 
@@ -34,14 +35,7 @@ interface Order {
 }
 
 async function getOrdersData(cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/user/orders`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth("/api/user/orders", cookie);
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -65,7 +59,10 @@ export default async function OrdersPage() {
 
   const userOrders: Order[] = data.orders || [];
 
-  const getPaymentStatus = (orderPayments: Payment[], orderCreatedAt: string) => {
+  const getPaymentStatus = (
+    orderPayments: Payment[],
+    orderCreatedAt: string
+  ) => {
     // 检查是否超时（30分钟）
     const now = new Date();
     const orderTime = new Date(orderCreatedAt);
@@ -74,32 +71,72 @@ export default async function OrdersPage() {
 
     if (!orderPayments || orderPayments.length === 0) {
       if (isExpired) {
-        return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+        return {
+          label: "已取消",
+          className: "bg-gray-100 text-gray-700",
+          canPay: false,
+        };
       }
-      return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+      return {
+        label: "待支付",
+        className: "bg-yellow-100 text-yellow-700",
+        canPay: true,
+      };
     }
     const latestPayment = orderPayments[orderPayments.length - 1];
     switch (latestPayment.status) {
       case "succeeded":
-        return { label: "已支付", className: "bg-green-100 text-green-700", canPay: false };
+        return {
+          label: "已支付",
+          className: "bg-green-100 text-green-700",
+          canPay: false,
+        };
       case "pending":
         // 支付中状态，如果未超时可以重新发起支付
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return {
+            label: "已取消",
+            className: "bg-gray-100 text-gray-700",
+            canPay: false,
+          };
         }
-        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+        return {
+          label: "待支付",
+          className: "bg-yellow-100 text-yellow-700",
+          canPay: true,
+        };
       case "failed":
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return {
+            label: "已取消",
+            className: "bg-gray-100 text-gray-700",
+            canPay: false,
+          };
         }
-        return { label: "支付失败", className: "bg-red-100 text-red-700", canPay: true };
+        return {
+          label: "支付失败",
+          className: "bg-red-100 text-red-700",
+          canPay: true,
+        };
       case "refunded":
-        return { label: "已退款", className: "bg-gray-100 text-gray-700", canPay: false };
+        return {
+          label: "已退款",
+          className: "bg-gray-100 text-gray-700",
+          canPay: false,
+        };
       default:
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return {
+            label: "已取消",
+            className: "bg-gray-100 text-gray-700",
+            canPay: false,
+          };
         }
-        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+        return {
+          label: "待支付",
+          className: "bg-yellow-100 text-yellow-700",
+          canPay: true,
+        };
     }
   };
 
@@ -141,9 +178,14 @@ export default async function OrdersPage() {
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-lg font-bold">订单 #{order.id}</h3>
                       {(() => {
-                        const status = getPaymentStatus(order.payments, order.createdAt);
+                        const status = getPaymentStatus(
+                          order.payments,
+                          order.createdAt
+                        );
                         return (
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}
+                          >
                             {status.label}
                           </span>
                         );
@@ -157,7 +199,10 @@ export default async function OrdersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {(() => {
-                      const status = getPaymentStatus(order.payments, order.createdAt);
+                      const status = getPaymentStatus(
+                        order.payments,
+                        order.createdAt
+                      );
                       return status.canPay ? (
                         <PayOrderButton orderId={order.id} />
                       ) : null;

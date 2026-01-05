@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Tag, ChevronLeft } from "lucide-react";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import TagList from "./TagList";
 import AddTagForm from "./AddTagForm";
 
@@ -24,14 +25,7 @@ interface TagsResponse {
 }
 
 async function getTagsData(cookie: string): Promise<TagsResponse> {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/admin/tags`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth("/api/admin/tags", cookie);
 
   if (!res.ok) {
     if (res.status === 401) {

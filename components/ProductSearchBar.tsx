@@ -10,7 +10,9 @@ interface ProductSearchBarProps {
   defaultValue?: string;
 }
 
-export default function ProductSearchBar({ defaultValue = "" }: ProductSearchBarProps) {
+export default function ProductSearchBar({
+  defaultValue = "",
+}: ProductSearchBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -34,7 +36,7 @@ export default function ProductSearchBar({ defaultValue = "" }: ProductSearchBar
         params.delete("search");
       }
       startTransition(() => {
-        router.push(`${pathname}?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
       });
     },
     [pathname, router, searchParams]

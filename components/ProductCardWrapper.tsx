@@ -13,7 +13,7 @@ type Product = {
   createdAt: Date | string;
   updatedAt: Date | string;
   tags?: string[] | null;
-  salesCount?: number | null;
+  salesCount?: number;
   averageRating?: string | null;
   reviewCount?: number | null;
 };

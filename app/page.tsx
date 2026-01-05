@@ -5,6 +5,7 @@ import SortSelector from "@/components/SortSelector";
 import Pagination from "@/components/Pagination";
 import { headers } from "next/headers";
 import { Suspense } from "react";
+import { fetchInternalApi, fetchInternalApiWithAuth } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ interface Product {
   price: string;
   imageUrl: string | null;
   tags: string[];
-  salesCount: number | null;
+  salesCount: number;
   averageRating: string | null;
   reviewCount: number | null;
   createdAt: string;
@@ -45,18 +46,16 @@ async function getProductsData(searchParams: SearchParams) {
   if (searchParams.page) queryParams.set("page", searchParams.page);
   if (searchParams.pageSize) queryParams.set("pageSize", searchParams.pageSize);
   if (searchParams.sortBy) queryParams.set("sortBy", searchParams.sortBy);
-  if (searchParams.sortOrder) queryParams.set("sortOrder", searchParams.sortOrder);
+  if (searchParams.sortOrder)
+    queryParams.set("sortOrder", searchParams.sortOrder);
 
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/products?${queryParams.toString()}`, {
-    cache: "no-store",
-  });
+  const res = await fetchInternalApi(`/api/products?${queryParams.toString()}`);
 
   if (!res.ok) {
-    return { products: [], pagination: { page: 1, pageSize: 12, total: 0, totalPages: 0 } };
+    return {
+      products: [],
+      pagination: { page: 1, pageSize: 12, total: 0, totalPages: 0 },
+    };
   }
 
   const data = await res.json();
@@ -72,13 +71,7 @@ async function getProductsData(searchParams: SearchParams) {
 }
 
 async function getTagsData() {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
-  const res = await fetch(`${protocol}://${host}/api/tags`, {
-    cache: "no-store",
-  });
+  const res = await fetchInternalApi("/api/tags");
 
   if (!res.ok) {
     return [];
@@ -90,17 +83,10 @@ async function getTagsData() {
 
 async function getCartProductIds() {
   const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
   const cookie = headersList.get("cookie") || "";
 
   try {
-    const res = await fetch(`${protocol}://${host}/api/cart/product-ids`, {
-      cache: "no-store",
-      headers: {
-        cookie,
-      },
-    });
+    const res = await fetchInternalApiWithAuth("/api/cart/product-ids", cookie);
 
     if (!res.ok) {
       return [];
@@ -120,11 +106,12 @@ export default async function Home({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [{ products: allProducts, pagination }, tags, cartProductIds] = await Promise.all([
-    getProductsData(params),
-    getTagsData(),
-    getCartProductIds(),
-  ]);
+  const [{ products: allProducts, pagination }, tags, cartProductIds] =
+    await Promise.all([
+      getProductsData(params),
+      getTagsData(),
+      getCartProductIds(),
+    ]);
 
   const hasFilters = params.search || params.tags;
 
@@ -152,48 +139,78 @@ export default async function Home({
 
       {/* Product List Overlay */}
       <div className="relative z-20 mt-[85vh] min-h-screen bg-white/40 backdrop-blur-2xl rounded-t-[3rem] border-t border-white/30 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.1)] transition-all">
-        <div className="container mx-auto px-4 py-16 md:py-24">
-          <div className="flex flex-col gap-10">
-            {/* 标题和搜索区域 */}
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200/50 pb-6">
-                <div className="space-y-1">
-                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                    热门精选
-                  </h2>
-                  <p className="text-slate-600">为您推荐本季最受欢迎的单品</p>
-                </div>
+        <div className="container mx-auto px-4 py-8 md:pb-24">
+          <div className="flex flex-col gap-4">
+            {/* 标题 */}
+            <div className="flex items-center justify-between border-b border-slate-200/50 pb-4">
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                  热门精选
+                </h2>
+                <p className="text-sm text-slate-600">
+                  为您推荐本季最受欢迎的单品
+                </p>
+              </div>
+            </div>
 
+            {/* 筛选栏 - 吸顶效果 */}
+            <div className="sticky top-[68px] z-30 -mx-4 px-4 py-3 backdrop-blur-xl rounded-3xl shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                 {/* 搜索框 */}
-                <Suspense fallback={<div className="w-full max-w-md h-10 bg-white/40 rounded-full animate-pulse" />}>
-                  <ProductSearchBar defaultValue={params.search} />
-                </Suspense>
-              </div>
-
-              {/* 标签过滤和排序 */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <Suspense fallback={<div className="h-8 bg-white/40 rounded-full w-64 animate-pulse" />}>
-                  <TagFilter tags={tags} />
-                </Suspense>
-
-                <Suspense fallback={<div className="h-8 bg-white/40 rounded-full w-96 animate-pulse" />}>
-                  <SortSelector />
-                </Suspense>
-              </div>
-
-              {/* 搜索结果统计 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  {hasFilters ? (
-                    <span>
-                      找到 <span className="font-semibold text-slate-900">{pagination.total}</span> 件商品
-                    </span>
-                  ) : (
-                    <span>
-                      共 <span className="font-semibold text-slate-900">{pagination.total}</span> 件好物
-                    </span>
-                  )}
+                <div className="lg:w-80 flex-shrink-0">
+                  <Suspense
+                    fallback={
+                      <div className="w-full h-10 bg-white/40 rounded-full animate-pulse" />
+                    }
+                  >
+                    <ProductSearchBar defaultValue={params.search} />
+                  </Suspense>
                 </div>
+
+                {/* 标签过滤 */}
+                <div className="flex-1 min-w-0">
+                  <Suspense
+                    fallback={
+                      <div className="h-8 bg-white/40 rounded-full w-64 animate-pulse" />
+                    }
+                  >
+                    <TagFilter tags={tags} />
+                  </Suspense>
+                </div>
+
+                {/* 排序选择器 */}
+                <div className="flex-shrink-0">
+                  <Suspense
+                    fallback={
+                      <div className="h-8 bg-white/40 rounded-full w-96 animate-pulse" />
+                    }
+                  >
+                    <SortSelector />
+                  </Suspense>
+                </div>
+              </div>
+            </div>
+
+            {/* 搜索结果统计 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                {hasFilters ? (
+                  <span>
+                    找到{" "}
+                    <span className="font-semibold text-slate-900">
+                      {pagination.total}
+                    </span>{" "}
+                    件商品
+                  </span>
+                ) : (
+                  <span>
+                    共{" "}
+                    <span className="font-semibold text-slate-900">
+                      {pagination.total}
+                    </span>{" "}
+                    件好物
+                  </span>
+                )}
               </div>
             </div>
 

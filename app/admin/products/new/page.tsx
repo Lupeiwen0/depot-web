@@ -1,19 +1,16 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
+import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
 async function verifyAdminAccess(cookie: string) {
-  const headersList = await headers();
-  const host = headersList.get("host") || "localhost:3000";
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-
   // 使用 admin products API 来验证权限（只获取1条记录来验证）
-  const res = await fetch(`${protocol}://${host}/api/admin/products?pageSize=1`, {
-    cache: "no-store",
-    headers: { cookie },
-  });
+  const res = await fetchInternalApiWithAuth(
+    "/api/admin/products?pageSize=1",
+    cookie
+  );
 
   if (!res.ok) {
     if (res.status === 401) {
