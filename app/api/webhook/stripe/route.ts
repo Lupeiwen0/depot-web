@@ -264,6 +264,13 @@ async function handleCheckoutSessionCompleted(
 
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
+    // 获取 price ID（可能是字符串或对象）
+    const subscriptionItem = subscription.items.data[0];
+    const priceId =
+      typeof subscriptionItem.price === "string"
+        ? subscriptionItem.price
+        : subscriptionItem.price.id;
+
     // 创建或更新会员记录
     const existingMembership = await db.query.userMemberships.findFirst({
       where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
@@ -276,7 +283,7 @@ async function handleCheckoutSessionCompleted(
           userId: userId,
           stripeSubscriptionId: subscriptionId,
           stripeCustomerId: subscription.customer as string,
-          stripePriceId: subscription.items.data[0].price.id,
+          stripePriceId: priceId,
           status: "active",
           currentPeriodStart: new Date(
             (subscription as any).current_period_start * 1000
