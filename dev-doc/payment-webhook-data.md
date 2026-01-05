@@ -289,7 +289,7 @@
 
 #### 订阅创建
 
--customer.subscription.created
+- customer.subscription.created
 
 ```json
 {
