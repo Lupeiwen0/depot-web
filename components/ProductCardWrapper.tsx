@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useScrollReveal } from "@/lib/use-scroll-reveal";
 import ProductCard from "./ProductCard";
 
@@ -11,6 +12,10 @@ type Product = {
   price: string;
   createdAt: Date;
   updatedAt: Date;
+  tags?: string[] | null;
+  salesCount?: number | null;
+  averageRating?: string | null;
+  reviewCount?: number | null;
 };
 
 interface ProductCardWrapperProps {
@@ -21,7 +26,7 @@ interface ProductCardWrapperProps {
 
 /**
  * 商品卡片包装器组件
- * 为商品卡片添加滚动渐入动效
+ * 为商品卡片添加滚动渐入动效和链接
  */
 export default function ProductCardWrapper({
   product,
@@ -43,7 +48,9 @@ export default function ProductCardWrapper({
         transitionDelay: isVisible ? `${(index % 4) * 100}ms` : "0ms",
       }}
     >
-      <ProductCard product={product} isInCart={isInCart} />
+      <Link href={`/products/${product.id}`} className="block">
+        <ProductCard product={product} isInCart={isInCart} />
+      </Link>
     </div>
   );
 }

@@ -4,6 +4,13 @@ import { pgTable, text, timestamp, boolean, index, pgEnum } from "drizzle-orm/pg
 // 用户角色枚举
 export const userRoleEnum = pgEnum("user_role", ["admin", "buyer"]);
 
+// 用户状态枚举
+export const userStatusEnum = pgEnum("user_status", [
+  "active", // 正常
+  "disabled", // 已禁用
+  "deleted", // 已删除
+]);
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -11,6 +18,12 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
   role: userRoleEnum("role").default("buyer").notNull(),
+
+  // 用户状态相关字段
+  status: userStatusEnum("status").default("active").notNull(),
+  disabledAt: timestamp("disabled_at"),
+  disabledReason: text("disabled_reason"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

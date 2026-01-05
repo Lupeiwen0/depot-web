@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Star } from "lucide-react";
 
 type Product = {
   id: number;
@@ -23,6 +23,11 @@ type Product = {
   price: string;
   createdAt: Date;
   updatedAt: Date;
+  // 新增字段
+  tags?: string[] | null;
+  salesCount?: number | null;
+  averageRating?: string | null;
+  reviewCount?: number | null;
 };
 
 export default function ProductCard({
@@ -121,6 +126,20 @@ export default function ProductCard({
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col gap-2 p-5">
+        {/* 标签显示 */}
+        {product.tags && product.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 -mt-1 mb-1">
+            {product.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="line-clamp-1 text-lg font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
             {product.title}
@@ -132,6 +151,24 @@ export default function ProductCard({
             {product.description}
           </p>
         )}
+
+        {/* 评分和销量 */}
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          {product.averageRating && parseFloat(product.averageRating) > 0 && (
+            <span className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <span className="font-medium text-foreground">
+                {parseFloat(product.averageRating).toFixed(1)}
+              </span>
+              {product.reviewCount != null && product.reviewCount > 0 && (
+                <span>({product.reviewCount})</span>
+              )}
+            </span>
+          )}
+          {product.salesCount != null && product.salesCount > 0 && (
+            <span>已售 {product.salesCount}</span>
+          )}
+        </div>
 
         <div className="mt-2 flex items-baseline gap-1">
           <span className="text-sm font-medium text-destructive">¥</span>

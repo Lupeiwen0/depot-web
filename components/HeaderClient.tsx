@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "@/lib/auth-client";
-import { ShoppingCart, Settings, LogOut } from "lucide-react";
+import { ShoppingCart, Settings, LogOut, Ticket, Users, Tag, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCartDrawer } from "@/contexts/CartDrawerContext";
@@ -55,21 +55,47 @@ export default function HeaderClient({
                 商品列表
               </Link>
               {session?.user && (
-                <Link
-                  href="/orders"
-                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-                >
-                  我的订单
-                </Link>
+                <>
+                  <Link
+                    href="/orders"
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    我的订单
+                  </Link>
+                  <Link
+                    href="/user/coupons"
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
+                  >
+                    <Ticket className="h-4 w-4 mr-1" />
+                    优惠券
+                  </Link>
+                </>
               )}
               {userRole === "admin" && (
-                <Link
-                  href="/admin/products"
-                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
-                >
-                  <Settings className="h-4 w-4 mr-1" />
-                  商品管理
-                </Link>
+                <>
+                  <Link
+                    href="/admin/products"
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    商品管理
+                  </Link>
+                  <Link
+                    href="/admin/tags"
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
+                  >
+                    <Tag className="h-4 w-4 mr-1" />
+                    标签管理
+                  </Link>
+                  <Link
+                    href="/admin/users"
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary flex items-center"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    用户管理
+                  </Link>
+                </>
               )}
             </div>
           </div>

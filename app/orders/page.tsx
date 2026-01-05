@@ -2,10 +2,15 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { orders } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { desc } from "drizzle-orm";
+import { orders, payments } from "@/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import Link from "next/link";
+import { Package, ChevronLeft, Ticket, CreditCard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import DeleteOrderButton from "./DeleteOrderButton";
+import PayOrderButton from "./PayOrderButton";
+
+export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
   const session = await auth.api.getSession({
@@ -16,18 +21,60 @@ export default async function OrdersPage() {
     redirect("/login");
   }
 
-  // 获取用户的所有订单
+  // 获取用户的所有订单（排除软删除的）
   const userOrders = await db.query.orders.findMany({
-    where: eq(orders.userId, session.user.id),
+    where: and(
+      eq(orders.userId, session.user.id),
+      eq(orders.deletedByUser, false)
+    ),
     with: {
       lineItems: {
         with: {
           product: true,
         },
       },
+      payments: true,
     },
     orderBy: [desc(orders.createdAt)],
   });
+
+  const getPaymentStatus = (orderPayments: typeof userOrders[0]["payments"], orderCreatedAt: Date) => {
+    // 检查是否超时（30分钟）
+    const now = new Date();
+    const orderTime = new Date(orderCreatedAt);
+    const diffMinutes = (now.getTime() - orderTime.getTime()) / (1000 * 60);
+    const isExpired = diffMinutes > 30;
+
+    if (!orderPayments || orderPayments.length === 0) {
+      if (isExpired) {
+        return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+      }
+      return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+    }
+    const latestPayment = orderPayments[orderPayments.length - 1];
+    switch (latestPayment.status) {
+      case "succeeded":
+        return { label: "已支付", className: "bg-green-100 text-green-700", canPay: false };
+      case "pending":
+        // 支付中状态，如果未超时可以重新发起支付
+        if (isExpired) {
+          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+        }
+        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+      case "failed":
+        if (isExpired) {
+          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+        }
+        return { label: "支付失败", className: "bg-red-100 text-red-700", canPay: true };
+      case "refunded":
+        return { label: "已退款", className: "bg-gray-100 text-gray-700", canPay: false };
+      default:
+        if (isExpired) {
+          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+        }
+        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+    }
+  };
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen bg-muted/5">
@@ -66,9 +113,14 @@ export default async function OrdersPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-lg font-bold">订单 #{order.id}</h3>
-                      <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary/10 text-primary hover:bg-primary/20">
-                        已支付
-                      </span>
+                      {(() => {
+                        const status = getPaymentStatus(order.payments, order.createdAt);
+                        return (
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.className}`}>
+                            {status.label}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <p className="text-sm text-muted-foreground">
@@ -76,12 +128,21 @@ export default async function OrdersPage() {
                       {new Date(order.createdAt).toLocaleString("zh-CN")}
                     </p>
                   </div>
-                  <Link
-                    href={`/orders/${order.id}`}
-                    className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
-                  >
-                    查看详情
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const status = getPaymentStatus(order.payments, order.createdAt);
+                      return status.canPay ? (
+                        <PayOrderButton orderId={order.id} />
+                      ) : null;
+                    })()}
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+                    >
+                      查看详情
+                    </Link>
+                    <DeleteOrderButton orderId={order.id} />
+                  </div>
                 </div>
 
                 <div className="">

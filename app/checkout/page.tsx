@@ -2,8 +2,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { carts, lineItems } from "@/db/schema";
-import { eq, isNull } from "drizzle-orm";
+import { carts, lineItems, userCoupons } from "@/db/schema";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import CheckoutForm from "@/components/CheckoutForm";
 
 export default async function CheckoutPage() {
@@ -34,6 +34,15 @@ export default async function CheckoutPage() {
     redirect("/cart");
   }
 
+  // 获取用户可用的优惠券
+  const availableCoupons = await db.query.userCoupons.findMany({
+    where: and(
+      eq(userCoupons.userId, session.user.id),
+      eq(userCoupons.status, "available"),
+      gt(userCoupons.expiresAt, new Date())
+    ),
+  });
+
   const total = cartItems.reduce((sum, item) => {
     return sum + parseFloat(item.product.price) * item.quantity;
   }, 0);
@@ -43,7 +52,14 @@ export default async function CheckoutPage() {
       <h1 className="text-3xl font-bold tracking-tight mb-8">填写订单信息</h1>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start animate-fade-in">
         <div className="lg:col-span-2">
-          <CheckoutForm userEmail={session.user.email!} />
+          <CheckoutForm
+            userEmail={session.user.email!}
+            availableCoupons={availableCoupons.map((c) => ({
+              id: c.id,
+              couponCode: c.couponCode,
+              percentOff: c.percentOff,
+            }))}
+          />
         </div>
         <div className="lg:col-span-1 sticky top-24">
           <div className="bg-card rounded-lg shadow-sm border p-6">

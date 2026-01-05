@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.baidu.com",
       },
+      {
+        protocol: "https",
+        hostname: "*.vercel.app",
+      },
     ],
   },
 };
