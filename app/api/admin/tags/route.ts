@@ -22,9 +22,17 @@ async function verifyAdmin() {
   return { user: session.user };
 }
 
-// GET - 获取所有标签
+// GET - 获取所有标签（管理后台）
 export async function GET() {
   try {
+    const authResult = await verifyAdmin();
+    if ("error" in authResult) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
     const tags = await db.query.productTags.findMany({
       orderBy: (productTags, { asc }) => [asc(productTags.name)],
     });

@@ -1,13 +1,9 @@
-import { db } from "@/db";
-import { products, carts } from "@/db/schema";
 import ProductCardWrapper from "@/components/ProductCardWrapper";
 import ProductSearchBar from "@/components/ProductSearchBar";
 import TagFilter from "@/components/TagFilter";
 import SortSelector from "@/components/SortSelector";
 import Pagination from "@/components/Pagination";
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { eq, and, ilike, desc, asc, sql, arrayContains } from "drizzle-orm";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
@@ -21,92 +17,101 @@ interface SearchParams {
   sortOrder?: string;
 }
 
+interface Product {
+  id: number;
+  title: string;
+  description: string | null;
+  price: string;
+  imageUrl: string | null;
+  tags: string[];
+  salesCount: number | null;
+  averageRating: string | null;
+  reviewCount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Tag {
+  id: number;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
 async function getProductsData(searchParams: SearchParams) {
-  const search = searchParams.search || "";
-  const tagsParam = searchParams.tags;
-  const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : [];
-  const page = parseInt(searchParams.page || "1");
-  const pageSize = Math.min(parseInt(searchParams.pageSize || "12"), 100);
-  const sortBy = searchParams.sortBy || "createdAt";
-  const sortOrder = searchParams.sortOrder || "desc";
+  const queryParams = new URLSearchParams();
+  if (searchParams.search) queryParams.set("search", searchParams.search);
+  if (searchParams.tags) queryParams.set("tags", searchParams.tags);
+  if (searchParams.page) queryParams.set("page", searchParams.page);
+  if (searchParams.pageSize) queryParams.set("pageSize", searchParams.pageSize);
+  if (searchParams.sortBy) queryParams.set("sortBy", searchParams.sortBy);
+  if (searchParams.sortOrder) queryParams.set("sortOrder", searchParams.sortOrder);
 
-  // 构建查询条件
-  const conditions = [eq(products.isActive, true)];
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
 
-  // 商品名称模糊搜索
-  if (search) {
-    conditions.push(ilike(products.title, `%${search}%`));
+  const res = await fetch(`${protocol}://${host}/api/products?${queryParams.toString()}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    return { products: [], pagination: { page: 1, pageSize: 12, total: 0, totalPages: 0 } };
   }
 
-  // 标签筛选
-  if (tags.length > 0) {
-    conditions.push(arrayContains(products.tags, tags));
-  }
-
-  // 排序字段映射
-  type SortableField = typeof products.salesCount | typeof products.averageRating | typeof products.createdAt | typeof products.price;
-  const sortFieldMap: Record<string, SortableField> = {
-    sales: products.salesCount,
-    rating: products.averageRating,
-    createdAt: products.createdAt,
-    price: products.price,
-  };
-
-  const sortField = sortFieldMap[sortBy] || products.createdAt;
-  const orderFn = sortOrder === "asc" ? asc : desc;
-
-  // 查询总数
-  const totalResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(products)
-    .where(and(...conditions));
-  const total = Number(totalResult[0].count);
-
-  // 分页查询
-  const productList = await db
-    .select({
-      id: products.id,
-      title: products.title,
-      description: products.description,
-      price: products.price,
-      imageUrl: products.imageUrl,
-      tags: products.tags,
-      salesCount: products.salesCount,
-      averageRating: products.averageRating,
-      reviewCount: products.reviewCount,
-      createdAt: products.createdAt,
-      updatedAt: products.updatedAt,
-    })
-    .from(products)
-    .where(and(...conditions))
-    .orderBy(orderFn(sortField))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
-
-  const totalPages = Math.ceil(total / pageSize);
-
+  const data = await res.json();
   return {
-    products: productList,
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages,
+    products: data.products as Product[],
+    pagination: data.pagination as {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
     },
   };
 }
 
 async function getTagsData() {
-  const allTags = await db.query.productTags.findMany({
-    orderBy: (productTags, { asc }) => [asc(productTags.name)],
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/tags`, {
+    cache: "no-store",
   });
 
-  return allTags.map((tag) => ({
-    id: tag.id,
-    name: tag.name,
-    slug: tag.slug,
-    color: tag.color,
-  }));
+  if (!res.ok) {
+    return [];
+  }
+
+  const data = await res.json();
+  return data.tags as Tag[];
+}
+
+async function getCartProductIds() {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+  const cookie = headersList.get("cookie") || "";
+
+  try {
+    const res = await fetch(`${protocol}://${host}/api/cart/product-ids`, {
+      cache: "no-store",
+      headers: {
+        cookie,
+      },
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    return data.productIds as number[];
+  } catch (error) {
+    console.error("获取购物车信息失败:", error);
+    return [];
+  }
 }
 
 export default async function Home({
@@ -115,37 +120,11 @@ export default async function Home({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [{ products: allProducts, pagination }, tags] = await Promise.all([
+  const [{ products: allProducts, pagination }, tags, cartProductIds] = await Promise.all([
     getProductsData(params),
     getTagsData(),
+    getCartProductIds(),
   ]);
-
-  // 获取用户购物车中的商品ID列表
-  let cartProductIds: number[] = [];
-  try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-
-    if (session?.user) {
-      const userCart = await db.query.carts.findFirst({
-        where: eq(carts.userId, session.user.id),
-        with: {
-          lineItems: {
-            columns: {
-              productId: true,
-            },
-          },
-        },
-      });
-
-      if (userCart?.lineItems) {
-        cartProductIds = userCart.lineItems.map((item) => item.productId);
-      }
-    }
-  } catch (error) {
-    console.error("获取购物车信息失败:", error);
-  }
 
   const hasFilters = params.search || params.tags;
 

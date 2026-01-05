@@ -35,6 +35,7 @@ jest.mock("@/db", () => ({
                     averageRating: "4.50",
                     reviewCount: 20,
                     createdAt: new Date("2026-01-01"),
+                    updatedAt: new Date("2026-01-01"),
                   },
                 ]),
               })),

@@ -7,6 +7,7 @@ import { Star, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OrderItemReviewProps {
+  orderId: number;
   productId: number;
   productTitle: string;
   existingReview?: {
@@ -20,6 +21,7 @@ interface OrderItemReviewProps {
 }
 
 export default function OrderItemReview({
+  orderId,
   productId,
   productTitle,
   existingReview,
@@ -44,7 +46,7 @@ export default function OrderItemReview({
       const res = await fetch(`/api/products/${productId}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, title, content }),
+        body: JSON.stringify({ orderId, rating, title, content }),
       });
 
       const data = await res.json();

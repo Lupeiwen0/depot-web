@@ -30,13 +30,15 @@ export async function GET(request: NextRequest) {
     }
 
     // 排序字段映射
-    const sortFieldMap: Record<string, typeof products.salesCount | typeof products.averageRating | typeof products.createdAt | typeof products.price> = {
+    type SortableField = typeof products.salesCount | typeof products.createdAt | typeof products.price;
+    const sortFieldMap: Record<string, SortableField> = {
       sales: products.salesCount,
-      rating: products.averageRating,
       createdAt: products.createdAt,
       price: products.price,
     };
 
+    // 特殊处理评分排序（因为 averageRating 是 decimal/string 类型）
+    const isRatingSort = sortBy === "rating";
     const sortField = sortFieldMap[sortBy] || products.createdAt;
     const orderFn = sortOrder === "asc" ? asc : desc;
 
@@ -61,10 +63,17 @@ export async function GET(request: NextRequest) {
         averageRating: products.averageRating,
         reviewCount: products.reviewCount,
         createdAt: products.createdAt,
+        updatedAt: products.updatedAt,
       })
       .from(products)
       .where(and(...conditions))
-      .orderBy(orderFn(sortField))
+      .orderBy(
+        isRatingSort
+          ? sortOrder === "desc"
+            ? desc(sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`)
+            : asc(sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`)
+          : orderFn(sortField)
+      )
       .limit(pageSize)
       .offset((page - 1) * pageSize);
 
@@ -73,7 +82,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       products: productList.map((product) => ({
         id: product.id,
-        name: product.title,
+        title: product.title,
         description: product.description,
         price: product.price,
         imageUrl: product.imageUrl,
@@ -83,6 +92,7 @@ export async function GET(request: NextRequest) {
         averageRating: product.averageRating,
         reviewCount: product.reviewCount,
         createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
       })),
       pagination: {
         page,

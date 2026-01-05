@@ -44,6 +44,10 @@ export default function ProductReviews({
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // 使用 API 返回的最新统计数据
+  const [statsRating, setStatsRating] = useState(averageRating);
+  const [statsCount, setStatsCount] = useState(reviewCount);
+
   // 评价表单状态
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
@@ -70,7 +74,13 @@ export default function ProductReviews({
         } else {
           setReviews(data.reviews);
         }
-        setHasMore(data.pagination.hasNext);
+        setHasMore(data.pagination.page < data.pagination.totalPages);
+      }
+
+      // 更新统计数据
+      if (data.stats) {
+        setStatsRating(data.stats.averageRating);
+        setStatsCount(data.stats.totalReviews);
       }
     } catch (err) {
       console.error("获取评价失败:", err);
@@ -127,7 +137,7 @@ export default function ProductReviews({
     }
   };
 
-  const rating_avg = averageRating ? parseFloat(averageRating) : 0;
+  const rating_avg = statsRating ? parseFloat(statsRating) : 0;
 
   return (
     <div className="space-y-6">
@@ -151,7 +161,7 @@ export default function ProductReviews({
             ))}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {reviewCount} 条评价
+            {statsCount} 条评价
           </p>
         </div>
 

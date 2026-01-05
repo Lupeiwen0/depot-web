@@ -1,10 +1,6 @@
-import { db } from "@/db";
-import { products, carts } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import ProductReviews from "@/components/ProductReviews";
 import AddToCartButton from "./AddToCartButton";
@@ -12,8 +8,64 @@ import { ChevronLeft, Star, ShoppingBag, Shield, Truck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+interface Product {
+  id: number;
+  title: string;
+  description: string | null;
+  price: string;
+  imageUrl: string | null;
+  productType: string;
+  tags: string[];
+  salesCount: number | null;
+  averageRating: string | null;
+  reviewCount: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ProductPageProps {
   params: Promise<{ id: string }>;
+}
+
+async function getProductDetail(productId: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/products/${productId}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) {
+      return { notFound: true };
+    }
+    return { error: true };
+  }
+
+  return await res.json();
+}
+
+async function getCartProductIds(cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  try {
+    const res = await fetch(`${protocol}://${host}/api/cart/product-ids`, {
+      cache: "no-store",
+      headers: { cookie },
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    return data.productIds as number[];
+  } catch {
+    return [];
+  }
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
@@ -24,39 +76,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, productId),
-  });
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
 
-  if (!product || !product.isActive) {
+  const [productData, cartProductIds] = await Promise.all([
+    getProductDetail(id),
+    getCartProductIds(cookie),
+  ]);
+
+  if (productData.notFound || productData.error) {
     notFound();
   }
 
-  // 获取用户购物车状态
-  let isInCart = false;
-  try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-
-    if (session?.user) {
-      const userCart = await db.query.carts.findFirst({
-        where: eq(carts.userId, session.user.id),
-        with: {
-          lineItems: {
-            columns: { productId: true },
-          },
-        },
-      });
-
-      if (userCart?.lineItems) {
-        isInCart = userCart.lineItems.some((item) => item.productId === productId);
-      }
-    }
-  } catch (error) {
-    console.error("获取购物车状态失败:", error);
-  }
-
+  const product: Product = productData.product;
+  const isInCart = cartProductIds.includes(productId);
   const rating = product.averageRating ? parseFloat(product.averageRating) : 0;
 
   return (
@@ -138,7 +171,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                       </span>
                     </div>
                   )}
-                  {product.salesCount !== undefined && product.salesCount > 0 && (
+                  {product.salesCount != null && product.salesCount > 0 && (
                     <span className="text-muted-foreground">
                       已售 {product.salesCount}
                     </span>

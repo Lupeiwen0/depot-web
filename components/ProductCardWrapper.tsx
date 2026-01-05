@@ -10,8 +10,8 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   tags?: string[] | null;
   salesCount?: number | null;
   averageRating?: string | null;

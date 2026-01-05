@@ -1,9 +1,5 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
-import { db } from "@/db";
-import { orders, productReviews } from "@/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -12,70 +8,91 @@ import PayOrderButton from "../PayOrderButton";
 
 export const dynamic = "force-dynamic";
 
+interface OrderReview {
+  id: number;
+  rating: number;
+  title: string | null;
+  content: string | null;
+  createdAt: string;
+}
+
+interface OrderItem {
+  id: number;
+  productId: number;
+  productTitle: string;
+  productPrice: string;
+  productImage: string | null;
+  quantity: number;
+  review: OrderReview | null;
+}
+
+interface Payment {
+  id: number;
+  status: string;
+  amount: string | null;
+  currency: string | null;
+}
+
+interface Order {
+  id: number;
+  name: string;
+  address: string;
+  email: string;
+  payType: string;
+  createdAt: string;
+  items: OrderItem[];
+  payments: Payment[];
+}
+
+async function getOrderDetail(orderId: string, cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/user/orders/${orderId}`, {
+    cache: "no-store",
+    headers: { cookie },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      return { unauthorized: true };
+    }
+    if (res.status === 404) {
+      return { notFound: true };
+    }
+    return { error: true };
+  }
+
+  return await res.json();
+}
+
 export default async function OrderDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
 
-  if (!session?.user) {
+  const data = await getOrderDetail(id, cookie);
+
+  if (data.unauthorized) {
     redirect("/login");
   }
 
-  // 获取订单详情
-  const order = await db.query.orders.findFirst({
-    where: and(
-      eq(orders.id, parseInt(id)),
-      eq(orders.userId, session.user.id)
-    ),
-    with: {
-      lineItems: {
-        with: {
-          product: true,
-        },
-      },
-      payments: true,
-    },
-  });
-
-  if (!order) {
+  if (data.notFound || data.error) {
     notFound();
   }
+
+  const order: Order = data.order;
 
   // 检查订单是否已支付
   const isPaid = order.payments?.some((p) => p.status === "succeeded") || false;
 
-  // 获取用户对这些商品的已有评价
-  const productIds = order.lineItems.map((item) => item.productId);
-  const existingReviews = productIds.length > 0
-    ? await db.query.productReviews.findMany({
-        where: and(
-          eq(productReviews.userId, session.user.id),
-          inArray(productReviews.productId, productIds)
-        ),
-      })
-    : [];
-
-  // 创建评价映射
-  const reviewMap = new Map(
-    existingReviews.map((r) => [
-      r.productId,
-      {
-        id: r.id,
-        rating: r.rating,
-        title: r.title,
-        content: r.content,
-        createdAt: r.createdAt.toISOString(),
-      },
-    ])
-  );
-
-  const total = order.lineItems.reduce((sum, item) => {
-    return sum + parseFloat(item.product.price) * item.quantity;
+  const total = order.items.reduce((sum, item) => {
+    return sum + parseFloat(item.productPrice) * item.quantity;
   }, 0);
 
   // 支付状态
@@ -199,14 +216,14 @@ export default async function OrderDetailPage({
         <div className="border-t pt-4">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">商品清单</h2>
           <div className="space-y-6">
-            {order.lineItems.map((item) => (
+            {order.items.map((item) => (
               <div key={item.id} className="border-b pb-4 last:border-b-0">
                 <div className="flex gap-4">
-                  {item.product.imageUrl && (
+                  {item.productImage && (
                     <div className="relative h-20 w-20 flex-shrink-0 bg-gray-200 rounded-md overflow-hidden">
                       <Image
-                        src={item.product.imageUrl}
-                        alt={item.product.title}
+                        src={item.productImage}
+                        alt={item.productTitle}
                         fill
                         className="object-cover"
                       />
@@ -214,23 +231,18 @@ export default async function OrderDetailPage({
                   )}
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
-                      {item.product.title}
+                      {item.productTitle}
                     </h3>
-                    {item.product.description && (
-                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                        {item.product.description}
-                      </p>
-                    )}
                     <div className="flex justify-between items-center mt-2">
                       <span className="text-sm text-gray-600">
                         数量: {item.quantity}
                       </span>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          单价: ¥{parseFloat(item.product.price).toFixed(2)}
+                          单价: ¥{parseFloat(item.productPrice).toFixed(2)}
                         </p>
                         <p className="font-semibold text-primary">
-                          小计: ¥{(parseFloat(item.product.price) * item.quantity).toFixed(2)}
+                          小计: ¥{(parseFloat(item.productPrice) * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -239,9 +251,10 @@ export default async function OrderDetailPage({
 
                 {/* 评价组件 */}
                 <OrderItemReview
+                  orderId={order.id}
                   productId={item.productId}
-                  productTitle={item.product.title}
-                  existingReview={reviewMap.get(item.productId) || null}
+                  productTitle={item.productTitle}
+                  existingReview={item.review}
                   canReview={isPaid}
                 />
               </div>
@@ -250,7 +263,7 @@ export default async function OrderDetailPage({
           <div className="flex justify-end mt-4 pt-4 border-t">
             <div className="text-right">
               <p className="text-sm text-gray-600">
-                共 {order.lineItems.reduce((sum, item) => sum + item.quantity, 0)} 件商品
+                共 {order.items.reduce((sum, item) => sum + item.quantity, 0)} 件商品
               </p>
               <p className="text-xl font-bold text-gray-900 mt-1">
                 订单总额: <span className="text-primary">¥{total.toFixed(2)}</span>

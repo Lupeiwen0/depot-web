@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil(total / pageSize);
 
     return NextResponse.json({
+      currentUserId: authResult.user.id,
       users: users.map((u) => ({
         id: u.id,
         name: u.name,

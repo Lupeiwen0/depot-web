@@ -1,36 +1,94 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { userCoupons } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
-import { Ticket, Clock, CheckCircle, XCircle, ChevronLeft } from "lucide-react";
+import { Ticket, Clock, CheckCircle, XCircle, ChevronLeft, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-export default async function UserCouponsPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+// 会员支付链接
+const MEMBERSHIP_PAYMENT_LINK = "https://buy.stripe.com/test_00w7sN3LUbQbfHu0Dv1oI04";
+
+interface Coupon {
+  id: number;
+  couponCode: string;
+  percentOff: number;
+  status: string;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+interface Membership {
+  id: number;
+  status: string;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  createdAt: string;
+}
+
+async function getCouponsData(cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/user/coupons`, {
+    cache: "no-store",
+    headers: { cookie },
   });
 
-  if (!session?.user) {
+  if (!res.ok) {
+    if (res.status === 401) {
+      return null; // 未登录
+    }
+    return { coupons: [], total: 0, available: 0, used: 0, expired: 0 };
+  }
+
+  return await res.json();
+}
+
+async function getMembershipData(cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/user/membership`, {
+    cache: "no-store",
+    headers: { cookie },
+  });
+
+  if (!res.ok) {
+    return { isMember: false, membership: null };
+  }
+
+  return await res.json();
+}
+
+export default async function UserCouponsPage() {
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
+
+  const [couponsData, membershipData] = await Promise.all([
+    getCouponsData(cookie),
+    getMembershipData(cookie),
+  ]);
+
+  // 未登录重定向
+  if (couponsData === null) {
     redirect("/login");
   }
 
-  const coupons = await db.query.userCoupons.findMany({
-    where: eq(userCoupons.userId, session.user.id),
-    orderBy: [desc(userCoupons.createdAt)],
-  });
-
-  // 统计
+  const coupons: Coupon[] = couponsData.coupons || [];
   const stats = {
-    total: coupons.length,
-    available: coupons.filter((c) => c.status === "available").length,
-    used: coupons.filter((c) => c.status === "used").length,
-    expired: coupons.filter((c) => c.status === "expired").length,
+    total: couponsData.total || 0,
+    available: couponsData.available || 0,
+    used: couponsData.used || 0,
+    expired: couponsData.expired || 0,
   };
+
+  const isMember = membershipData.isMember;
+  const membership: Membership | null = membershipData.membership;
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -75,6 +133,53 @@ export default async function UserCouponsPage() {
 
         <h1 className="text-3xl font-bold text-slate-900 mb-8">我的优惠券</h1>
 
+        {/* 会员状态提示 */}
+        {!isMember && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-6 mb-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                  <Crown className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">开通会员，享更多优惠</h3>
+                  <p className="text-sm text-muted-foreground">
+                    成为会员每月可获得 30 张 10% 折扣优惠券
+                  </p>
+                </div>
+              </div>
+              <Link href={MEMBERSHIP_PAYMENT_LINK}>
+                <Button className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+                  <Crown className="h-4 w-4" />
+                  立即开通会员
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* 会员状态显示 */}
+        {isMember && membership && (
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 p-6 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                <Crown className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-900">尊贵会员</h3>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-700">
+                    生效中
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  会员有效期至 {membership.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("zh-CN") : "未知"}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 统计卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl p-4 border shadow-sm">
@@ -102,9 +207,17 @@ export default async function UserCouponsPage() {
             <h3 className="text-lg font-medium text-slate-900 mb-2">
               暂无优惠券
             </h3>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-6">
               订阅会员即可每月获得 30 张优惠券
             </p>
+            {!isMember && (
+              <Link href={MEMBERSHIP_PAYMENT_LINK}>
+                <Button className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+                  <Crown className="h-4 w-4" />
+                  立即开通会员
+                </Button>
+              </Link>
+            )}
           </div>
         ) : (
           <div className="grid gap-4">

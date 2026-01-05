@@ -248,7 +248,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 async function updateProductRating(productId: number) {
   const stats = await db
     .select({
-      avgRating: sql<number>`AVG(${productReviews.rating})`,
+      avgRating: sql<string>`AVG(${productReviews.rating})`,
       count: sql<number>`COUNT(*)`,
     })
     .from(productReviews)
@@ -259,7 +259,7 @@ async function updateProductRating(productId: number) {
       )
     );
 
-  const avgRating = stats[0].avgRating || 0;
+  const avgRating = parseFloat(stats[0].avgRating) || 0;
   const count = Number(stats[0].count);
 
   await db

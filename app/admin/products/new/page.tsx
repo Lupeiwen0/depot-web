@@ -1,23 +1,44 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
 import ProductForm from "@/components/admin/ProductForm";
 
-export default async function NewProductPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+export const dynamic = "force-dynamic";
+
+async function verifyAdminAccess(cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  // 使用 admin products API 来验证权限（只获取1条记录来验证）
+  const res = await fetch(`${protocol}://${host}/api/admin/products?pageSize=1`, {
+    cache: "no-store",
+    headers: { cookie },
   });
 
-  if (!session?.user) {
+  if (!res.ok) {
+    if (res.status === 401) {
+      return { unauthorized: true };
+    }
+    if (res.status === 403) {
+      return { forbidden: true };
+    }
+    return { error: true };
+  }
+
+  return { authorized: true };
+}
+
+export default async function NewProductPage() {
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
+
+  const result = await verifyAdminAccess(cookie);
+
+  if (result.unauthorized) {
     redirect("/login");
   }
 
-  const userRecord = await db.query.user.findFirst({
-    where: (user, { eq }) => eq(user.id, session.user.id),
-  });
-
-  if (userRecord?.role !== "admin") {
+  if (result.forbidden) {
     redirect("/");
   }
 

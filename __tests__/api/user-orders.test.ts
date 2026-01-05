@@ -116,7 +116,7 @@ describe("User Orders API", () => {
       expect(data.orders[0]).toHaveProperty("id");
       expect(data.orders[0]).toHaveProperty("name");
       expect(data.orders[0]).toHaveProperty("items");
-      expect(data.orders[0]).toHaveProperty("payment");
+      expect(data.orders[0]).toHaveProperty("payments");
     });
 
     it("should require authentication", async () => {

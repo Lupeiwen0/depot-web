@@ -11,8 +11,8 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 };
 
 export default function ProductsContainer({

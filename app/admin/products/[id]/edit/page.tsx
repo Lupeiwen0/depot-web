@@ -1,10 +1,53 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
-import { db } from "@/db";
-import { products } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import ProductForm from "@/components/admin/ProductForm";
+
+export const dynamic = "force-dynamic";
+
+interface Product {
+  id: number;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  price: string;
+  productType: string;
+  stripeProductId: string | null;
+  stripePriceId: string | null;
+  stripePaymentLinkUrl: string | null;
+  isActive: boolean;
+  tags: string[] | null;
+  salesCount: number;
+  averageRating: string;
+  reviewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+async function getProduct(productId: string, cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/admin/products/${productId}`, {
+    cache: "no-store",
+    headers: { cookie },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      return { unauthorized: true };
+    }
+    if (res.status === 403) {
+      return { forbidden: true };
+    }
+    if (res.status === 404) {
+      return { notFound: true };
+    }
+    return { error: true };
+  }
+
+  return await res.json();
+}
 
 export default async function EditProductPage({
   params,
@@ -12,29 +55,24 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
 
-  if (!session?.user) {
+  const data = await getProduct(id, cookie);
+
+  if (data.unauthorized) {
     redirect("/login");
   }
 
-  const userRecord = await db.query.user.findFirst({
-    where: (user, { eq }) => eq(user.id, session.user.id),
-  });
-
-  if (userRecord?.role !== "admin") {
+  if (data.forbidden) {
     redirect("/");
   }
 
-  const product = await db.query.products.findFirst({
-    where: eq(products.id, parseInt(id)),
-  });
-
-  if (!product) {
+  if (data.notFound || data.error) {
     notFound();
   }
+
+  const product: Product = data.product;
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

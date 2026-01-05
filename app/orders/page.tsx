@@ -1,44 +1,71 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { orders, payments } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
 import Link from "next/link";
-import { Package, ChevronLeft, Ticket, CreditCard } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import DeleteOrderButton from "./DeleteOrderButton";
 import PayOrderButton from "./PayOrderButton";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+interface OrderItem {
+  id: number;
+  productId: number;
+  productTitle: string;
+  productPrice: string;
+  productImage: string | null;
+  quantity: number;
+}
+
+interface Payment {
+  id: number;
+  status: string;
+  amount: string | null;
+  currency: string | null;
+}
+
+interface Order {
+  id: number;
+  name: string;
+  address: string;
+  email: string;
+  payType: string;
+  createdAt: string;
+  items: OrderItem[];
+  payments: Payment[];
+}
+
+async function getOrdersData(cookie: string) {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/user/orders`, {
+    cache: "no-store",
+    headers: { cookie },
   });
 
-  if (!session?.user) {
+  if (!res.ok) {
+    if (res.status === 401) {
+      return null; // 未登录
+    }
+    return { orders: [] };
+  }
+
+  return await res.json();
+}
+
+export default async function OrdersPage() {
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
+
+  const data = await getOrdersData(cookie);
+
+  if (data === null) {
     redirect("/login");
   }
 
-  // 获取用户的所有订单（排除软删除的）
-  const userOrders = await db.query.orders.findMany({
-    where: and(
-      eq(orders.userId, session.user.id),
-      eq(orders.deletedByUser, false)
-    ),
-    with: {
-      lineItems: {
-        with: {
-          product: true,
-        },
-      },
-      payments: true,
-    },
-    orderBy: [desc(orders.createdAt)],
-  });
+  const userOrders: Order[] = data.orders || [];
 
-  const getPaymentStatus = (orderPayments: typeof userOrders[0]["payments"], orderCreatedAt: Date) => {
+  const getPaymentStatus = (orderPayments: Payment[], orderCreatedAt: string) => {
     // 检查是否超时（30分钟）
     const now = new Date();
     const orderTime = new Date(orderCreatedAt);
@@ -96,8 +123,8 @@ export default async function OrdersPage() {
       ) : (
         <div className="space-y-6 animate-slide-up">
           {userOrders.map((order, index) => {
-            const total = order.lineItems.reduce((sum, item) => {
-              return sum + parseFloat(item.product.price) * item.quantity;
+            const total = order.items.reduce((sum, item) => {
+              return sum + parseFloat(item.productPrice) * item.quantity;
             }, 0);
 
             return (
@@ -192,13 +219,13 @@ export default async function OrdersPage() {
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-sm font-medium mb-3">商品清单</p>
                     <div className="space-y-3">
-                      {order.lineItems.map((item) => (
+                      {order.items.map((item) => (
                         <div
                           key={item.id}
                           className="flex justify-between text-sm"
                         >
                           <span className="text-muted-foreground">
-                            {item.product.title}{" "}
+                            {item.productTitle}{" "}
                             <span className="text-foreground">
                               × {item.quantity}
                             </span>
@@ -206,7 +233,7 @@ export default async function OrdersPage() {
                           <span className="font-medium">
                             ¥
                             {(
-                              parseFloat(item.product.price) * item.quantity
+                              parseFloat(item.productPrice) * item.quantity
                             ).toFixed(2)}
                           </span>
                         </div>

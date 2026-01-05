@@ -1,27 +1,78 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
 import Link from "next/link";
-import { Tag, Plus, ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Tag, ChevronLeft } from "lucide-react";
 import TagList from "./TagList";
 import AddTagForm from "./AddTagForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminTagsPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+interface TagData {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string | null;
+  createdAt: string;
+}
+
+interface TagsResponse {
+  tags: TagData[];
+  unauthorized?: boolean;
+  forbidden?: boolean;
+  error?: boolean;
+}
+
+async function getTagsData(cookie: string): Promise<TagsResponse> {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/admin/tags`, {
+    cache: "no-store",
+    headers: { cookie },
   });
 
-  if (!session?.user || session.user.role !== "admin") {
+  if (!res.ok) {
+    if (res.status === 401) {
+      return { unauthorized: true, tags: [] };
+    }
+    if (res.status === 403) {
+      return { forbidden: true, tags: [] };
+    }
+    return { error: true, tags: [] };
+  }
+
+  return await res.json();
+}
+
+export default async function AdminTagsPage() {
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
+
+  const data = await getTagsData(cookie);
+
+  if (data.unauthorized) {
+    redirect("/login");
+  }
+
+  if (data.forbidden) {
     redirect("/");
   }
 
-  const tags = await db.query.productTags.findMany({
-    orderBy: (productTags, { desc }) => [desc(productTags.createdAt)],
-  });
+  if (data.error) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <div className="container mx-auto px-4 py-8 md:py-12">
+          <div className="text-center py-10">
+            <p className="text-red-500">加载标签列表失败，请稍后重试</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const tags = data.tags;
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
@@ -64,7 +115,7 @@ export default async function AdminTagsPage() {
                 slug: tag.slug,
                 description: tag.description,
                 color: tag.color,
-                createdAt: tag.createdAt.toISOString(),
+                createdAt: tag.createdAt,
               }))}
             />
           </div>

@@ -21,8 +21,8 @@ type Product = {
   description: string | null;
   imageUrl: string | null;
   price: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   // 新增字段
   tags?: string[] | null;
   salesCount?: number | null;

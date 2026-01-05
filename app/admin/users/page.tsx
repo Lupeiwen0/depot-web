@@ -1,39 +1,88 @@
-import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
-import { user } from "@/db/schema";
-import { desc, ne } from "drizzle-orm";
 import Link from "next/link";
 import { Users, ChevronLeft } from "lucide-react";
 import UserList from "./UserList";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminUsersPage() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  image: string | null;
+  createdAt: string;
+  disabledAt: string | null;
+  disabledReason: string | null;
+  membershipStatus: string | null;
+}
+
+interface UsersData {
+  currentUserId: string;
+  users: User[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  unauthorized?: boolean;
+  forbidden?: boolean;
+  error?: boolean;
+}
+
+async function getUsersData(cookie: string): Promise<UsersData> {
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+
+  const res = await fetch(`${protocol}://${host}/api/admin/users?pageSize=100`, {
+    cache: "no-store",
+    headers: { cookie },
   });
 
-  if (!session?.user || session.user.role !== "admin") {
+  if (!res.ok) {
+    if (res.status === 401) {
+      return { unauthorized: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+    }
+    if (res.status === 403) {
+      return { forbidden: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+    }
+    return { error: true, currentUserId: "", users: [], pagination: { page: 1, pageSize: 100, total: 0, totalPages: 0 } };
+  }
+
+  return await res.json();
+}
+
+export default async function AdminUsersPage() {
+  const headersList = await headers();
+  const cookie = headersList.get("cookie") || "";
+
+  const data = await getUsersData(cookie);
+
+  if (data.unauthorized) {
+    redirect("/login");
+  }
+
+  if (data.forbidden) {
     redirect("/");
   }
 
-  // 获取所有用户（排除已删除的）
-  const users = await db
-    .select({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-      createdAt: user.createdAt,
-      disabledAt: user.disabledAt,
-      disabledReason: user.disabledReason,
-    })
-    .from(user)
-    .where(ne(user.status, "deleted"))
-    .orderBy(desc(user.createdAt));
+  if (data.error) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <div className="container mx-auto px-4 py-8 md:py-12">
+          <div className="text-center py-10">
+            <p className="text-red-500">加载用户列表失败，请稍后重试</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const users = data.users;
 
   // 统计
   const stats = {
@@ -97,11 +146,11 @@ export default async function AdminUsersPage() {
             email: u.email,
             role: u.role || "buyer",
             status: u.status || "active",
-            createdAt: u.createdAt.toISOString(),
-            disabledAt: u.disabledAt?.toISOString() || null,
+            createdAt: u.createdAt,
+            disabledAt: u.disabledAt,
             disabledReason: u.disabledReason,
           }))}
-          currentUserId={session.user.id}
+          currentUserId={data.currentUserId}
         />
       </div>
     </main>

@@ -49,13 +49,12 @@ export async function GET(request: NextRequest) {
           productImage: item.product.imageUrl,
           quantity: item.quantity,
         })),
-        payment: order.payments[0]
-          ? {
-              status: order.payments[0].status,
-              amount: order.payments[0].amount,
-              currency: order.payments[0].currency,
-            }
-          : null,
+        payments: order.payments.map((p) => ({
+          id: p.id,
+          status: p.status,
+          amount: p.amount,
+          currency: p.currency,
+        })),
       })),
     });
   } catch (error) {
