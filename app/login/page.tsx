@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +17,23 @@ import { useTranslations } from "next-intl";
 
 export default function LoginPage() {
   const t = useTranslations("auth");
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState("");
+
+  // 当从其他页面重定向到登录页时，刷新服务端组件状态（重置 Header）
+  useEffect(() => {
+    const redirect = searchParams.get("redirect");
+    if (redirect) {
+      // 刷新服务端组件以更新 Header 状态
+      router.refresh();
+    }
+  }, [searchParams, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

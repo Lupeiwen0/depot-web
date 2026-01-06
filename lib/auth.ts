@@ -3,6 +3,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 
+// Cookie 前缀，从环境变量获取，默认为 dp-dev
+export const COOKIE_PREFIX = process.env.COOKIE_PREFIX || "dp-dev";
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -31,6 +34,9 @@ export const auth = betterAuth({
       enabled: true,
       maxAge: 5 * 60, // 5 minutes
     },
+  },
+  advanced: {
+    cookiePrefix: COOKIE_PREFIX,
   },
 });
 

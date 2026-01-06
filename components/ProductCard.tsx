@@ -68,7 +68,7 @@ export default function ProductCard({
   };
 
   return (
-    <Card className="flex flex-col group relative h-[480px] overflow-hidden rounded-xl border-white/40 bg-white/60 backdrop-blur-md transition-all duration-500 hover:shadow-2xl hover:border-primary/20 hover:bg-white/80">
+    <Card className="flex flex-col group relative min-h-[480px] rounded-xl border-white/40 bg-white/60 backdrop-blur-md transition-all duration-500 hover:shadow-2xl hover:border-primary/20 hover:bg-white/80">
       <CardHeader className="p-0">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-white/20">
           {product.imageUrl ? (
