@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import TagSelector from "./TagSelector";
+import ImageUploader from "./ImageUploader";
 
 type Product = {
   id: number;
@@ -38,6 +39,17 @@ export default function ProductFormDialog({
   const [selectedTags, setSelectedTags] = useState<string[]>(
     product?.tags || []
   );
+  const [imageUrl, setImageUrl] = useState(product?.imageUrl || "");
+
+  // 当弹窗状态改变时，重置表单状态
+  useEffect(() => {
+    if (open) {
+      // 弹窗打开时，根据是否有 product 来初始化状态
+      setSelectedTags(product?.tags || []);
+      setImageUrl(product?.imageUrl || "");
+      setError("");
+    }
+  }, [open, product]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -62,11 +74,13 @@ export default function ProductFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {product ? "编辑商品" : "添加商品"}
-          </DialogTitle>
+          <DialogTitle>{product ? "编辑商品" : "添加商品"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          key={open ? product?.id || "new" : "closed"}
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
           {error && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive font-medium">
               {error}
@@ -107,21 +121,11 @@ export default function ProductFormDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="imageUrl"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              图片链接
-            </label>
-            <Input
-              type="url"
-              id="imageUrl"
-              name="imageUrl"
-              defaultValue={product?.imageUrl || ""}
-              placeholder="https://example.com/image.jpg"
-            />
-          </div>
+          <ImageUploader
+            value={imageUrl}
+            onChange={setImageUrl}
+            name="imageUrl"
+          />
 
           <div className="space-y-2">
             <label
@@ -142,10 +146,7 @@ export default function ProductFormDialog({
             />
           </div>
 
-          <TagSelector
-            selectedTags={selectedTags}
-            onChange={setSelectedTags}
-          />
+          <TagSelector selectedTags={selectedTags} onChange={setSelectedTags} />
 
           <DialogFooter>
             <Button

@@ -2,30 +2,51 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createOrder } from "@/app/actions/order";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CreditCard, Loader2, Ticket } from "lucide-react";
+import { CreditCard, Loader2, Ticket, Tag } from "lucide-react";
+
+interface Coupon {
+  id: number;
+  couponCode: string;
+  percentOff: number;
+}
 
 interface CheckoutFormProps {
   userEmail: string;
-  availableCoupons?: Array<{
-    id: number;
-    couponCode: string;
-    percentOff: number;
-  }>;
+  availableCoupons?: Coupon[];
+  subtotal?: number;
+  total?: number;
 }
 
 export default function CheckoutForm({
   userEmail,
   availableCoupons = [],
+  subtotal = 0,
+  total = 0,
 }: CheckoutFormProps) {
   const router = useRouter();
+  const t = useTranslations("checkout");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedCoupon, setSelectedCoupon] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "legacy">("stripe");
+  // 默认选中第一张可用优惠券
+  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(
+    availableCoupons.length > 0 ? availableCoupons[0].id : null
+  );
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "legacy">(
+    "stripe"
+  );
+
+  // 计算价格
+  const selectedCoupon = availableCoupons.find(
+    (c) => c.id === selectedCouponId
+  );
+  const discountPercent = selectedCoupon?.percentOff || 0;
+  const discountAmount = subtotal * (discountPercent / 100);
+  const finalTotal = subtotal - discountAmount;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,7 +60,7 @@ export default function CheckoutForm({
       const result = await createOrder(formData);
 
       if (!result.success || !result.orderId) {
-        setError(result.error || "创建订单失败");
+        setError(result.error || t("createOrderFailed"));
         setLoading(false);
         return;
       }
@@ -53,14 +74,14 @@ export default function CheckoutForm({
           body: JSON.stringify({
             orderId: result.orderId,
             paymentType: "one_time",
-            couponCode: selectedCoupon || undefined,
+            couponId: selectedCouponId || undefined,
           }),
         });
 
         const data = await response.json();
 
         if (!response.ok) {
-          setError(data.error || "创建支付会话失败");
+          setError(data.error || t("createPaymentFailed"));
           setLoading(false);
           return;
         }
@@ -74,14 +95,14 @@ export default function CheckoutForm({
         router.push(`/orders/${result.orderId}`);
       }
     } catch (err) {
-      setError("处理订单时出错");
+      setError(t("orderError"));
       setLoading(false);
     }
   };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900">配送与支付信息</h2>
+      <h2 className="text-lg font-semibold text-gray-900">{t("shippingAndPayment")}</h2>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
@@ -96,14 +117,14 @@ export default function CheckoutForm({
             htmlFor="name"
             className="block text-sm font-medium text-gray-700 mb-1.5"
           >
-            收货人姓名
+            {t("recipientName")}
           </label>
           <Input
             type="text"
             id="name"
             name="name"
             required
-            placeholder="请输入收货人姓名"
+            placeholder={t("recipientNamePlaceholder")}
             className="bg-gray-50 focus:bg-white transition-colors"
           />
         </div>
@@ -114,14 +135,14 @@ export default function CheckoutForm({
             htmlFor="address"
             className="block text-sm font-medium text-gray-700 mb-1.5"
           >
-            收货地址
+            {t("shippingAddress")}
           </label>
           <Textarea
             id="address"
             name="address"
             required
             rows={3}
-            placeholder="请输入详细收货地址"
+            placeholder={t("shippingAddressPlaceholder")}
             className="bg-gray-50 focus:bg-white transition-colors"
           />
         </div>
@@ -132,7 +153,7 @@ export default function CheckoutForm({
             htmlFor="email"
             className="block text-sm font-medium text-gray-700 mb-1.5"
           >
-            联系邮箱
+            {t("contactEmail")}
           </label>
           <Input
             type="email"
@@ -140,7 +161,7 @@ export default function CheckoutForm({
             name="email"
             required
             defaultValue={userEmail}
-            placeholder="请输入联系邮箱"
+            placeholder={t("contactEmailPlaceholder")}
             className="bg-gray-50 focus:bg-white transition-colors"
           />
         </div>
@@ -150,30 +171,55 @@ export default function CheckoutForm({
 
         {/* 优惠券选择 */}
         {availableCoupons.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">
               <Ticket className="inline h-4 w-4 mr-1" />
-              使用优惠券
+              {t("useCoupon")}
             </label>
             <select
-              value={selectedCoupon}
-              onChange={(e) => setSelectedCoupon(e.target.value)}
+              value={selectedCouponId ?? ""}
+              onChange={(e) =>
+                setSelectedCouponId(
+                  e.target.value ? parseInt(e.target.value) : null
+                )
+              }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
             >
-              <option value="">不使用优惠券</option>
+              <option value="">{t("noCoupon")}</option>
               {availableCoupons.map((coupon) => (
-                <option key={coupon.id} value={coupon.couponCode}>
-                  {coupon.couponCode} - {coupon.percentOff}% 折扣
+                <option key={coupon.id} value={coupon.id}>
+                  {t("couponDiscount", { code: coupon.couponCode, percent: coupon.percentOff })}
                 </option>
               ))}
             </select>
+
+            {/* 价格详情展示 */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{t("subtotal")}</span>
+                <span>¥{subtotal.toFixed(2)}</span>
+              </div>
+              {selectedCouponId && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    {t("couponDeduction", { percent: discountPercent })}
+                  </span>
+                  <span>-¥{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-200">
+                <span>{t("totalAmount")}</span>
+                <span className="text-primary">¥{finalTotal.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
         )}
 
         {/* 支付方式选择 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-3">
-            支付方式
+            {t("paymentMethod")}
           </label>
           <div className="grid grid-cols-1 gap-3">
             <label
@@ -201,14 +247,18 @@ export default function CheckoutForm({
                 <CreditCard className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-gray-900">Stripe 安全支付</p>
+                <p className="font-medium text-gray-900">{t("stripePayment")}</p>
                 <p className="text-sm text-gray-500">
-                  支持 Visa、MasterCard、银联等主流信用卡
+                  {t("stripePaymentDesc")}
                 </p>
               </div>
               {paymentMethod === "stripe" && (
                 <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white">
-                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                  <svg
+                    className="h-3 w-3"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -229,18 +279,18 @@ export default function CheckoutForm({
           {loading ? (
             <span className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              处理中...
+              {t("submitting")}
             </span>
           ) : (
             <span className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
-              立即支付
+              {t("placeOrder")}
             </span>
           )}
         </Button>
 
         <p className="text-xs text-center text-gray-500">
-          点击支付即表示您同意我们的服务条款和隐私政策
+          {t("termsHint")}
         </p>
       </form>
     </div>

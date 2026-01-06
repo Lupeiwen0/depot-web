@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ProductsContainer from "@/components/admin/ProductsContainer";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ async function getProducts(cookie: string) {
 export default async function AdminProductsPage() {
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("admin");
 
   const data = await getProducts(cookie);
 
@@ -58,7 +60,7 @@ export default async function AdminProductsPage() {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen bg-muted/5">
         <div className="text-center py-10">
-          <p className="text-red-500">加载商品列表失败，请稍后重试</p>
+          <p className="text-red-500">{t("loadFailed")}</p>
         </div>
       </main>
     );

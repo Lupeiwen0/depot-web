@@ -13,6 +13,11 @@ import {
 } from "@/db/schema";
 import { stripe } from "@/lib/stripe";
 import { fromStripeAmount } from "@/lib/currency";
+import {
+  createMembershipCoupons,
+  revokeMembershipCoupons,
+  applyCoupon,
+} from "@/lib/coupon-service";
 import Stripe from "stripe";
 import { sql } from "drizzle-orm";
 
@@ -99,10 +104,6 @@ export async function POST(request: NextRequest) {
 
       case "charge.refunded":
         await handleChargeRefunded(event.data.object as Stripe.Charge);
-        break;
-
-      case "coupon.updated":
-        await handleCouponUpdated(event.data.object as Stripe.Coupon);
         break;
 
       default:
@@ -267,6 +268,16 @@ async function handleCheckoutSessionCompleted(
           updatedAt: new Date(),
         })
         .where(eq(payments.stripeCheckoutSessionId, session.id));
+
+      // 处理优惠券使用完成
+      const couponIdStr = session.metadata?.couponId;
+      if (couponIdStr && orderId) {
+        const couponId = parseInt(couponIdStr);
+        if (!isNaN(couponId)) {
+          await applyCoupon(couponId, parseInt(orderId));
+          console.log(`Applied coupon ${couponId} to order ${orderId}`);
+        }
+      }
     }
   } else if (paymentType === "subscription") {
     // 订阅支付 - 处理会员订阅
@@ -284,12 +295,18 @@ async function handleCheckoutSessionCompleted(
       return;
     }
 
+    // 获取订阅详情以获取周期信息
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const periodStart = new Date(
+      (subscription as any).current_period_start * 1000
+    );
+
     // 创建或更新会员记录
-    const existingMembership = await db.query.userMemberships.findFirst({
+    let membership = await db.query.userMemberships.findFirst({
       where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
     });
 
-    if (!existingMembership) {
+    if (!membership) {
       const [newMembership] = await db
         .insert(userMemberships)
         .values({
@@ -298,12 +315,17 @@ async function handleCheckoutSessionCompleted(
           stripeCustomerId,
           stripePriceId: priceId,
           status: "active",
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: new Date(
+            (subscription as any).current_period_end * 1000
+          ),
         })
         .returning();
-
-      // 首次订阅成功，立即发放优惠券
-      await createMembershipCoupons(userId, newMembership.id, stripeCustomerId);
+      membership = newMembership;
     }
+
+    // 发放优惠券（幂等性检查内置于服务中）
+    await createMembershipCoupons(userId, membership.id, periodStart);
   }
 }
 
@@ -373,44 +395,41 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  // 订阅续费成功时发放优惠券
+  // 订阅续费成功时发放优惠券（首次订阅在 checkout.session.completed 中处理）
   if (
     (invoice as any).subscription &&
     invoice.billing_reason === "subscription_cycle"
   ) {
+    const subscriptionId = (invoice as any).subscription as string;
+
     const membership = await db.query.userMemberships.findFirst({
-      where: eq(
-        userMemberships.stripeSubscriptionId,
-        (invoice as any).subscription as string
-      ),
+      where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
     });
 
     if (membership) {
-      await createMembershipCoupons(
-        membership.userId,
-        membership.id,
-        membership.stripeCustomerId
+      // 获取当前订阅周期开始时间
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const periodStart = new Date(
+        (subscription as any).current_period_start * 1000
       );
-    }
-  }
 
-  // 首次订阅成功也发放优惠券
-  if (
-    (invoice as any).subscription &&
-    invoice.billing_reason === "subscription_create"
-  ) {
-    const membership = await db.query.userMemberships.findFirst({
-      where: eq(
-        userMemberships.stripeSubscriptionId,
-        (invoice as any).subscription as string
-      ),
-    });
+      // 更新会员周期信息
+      await db
+        .update(userMemberships)
+        .set({
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: new Date(
+            (subscription as any).current_period_end * 1000
+          ),
+          updatedAt: new Date(),
+        })
+        .where(eq(userMemberships.id, membership.id));
 
-    if (membership) {
+      // 发放优惠券（幂等性检查内置于服务中）
       await createMembershipCoupons(
         membership.userId,
         membership.id,
-        membership.stripeCustomerId
+        periodStart
       );
     }
   }
@@ -462,115 +481,6 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     }
   }
   // 一次性支付的退款不需要额外处理，payment状态已更新
-}
-
-async function handleCouponUpdated(coupon: Stripe.Coupon) {
-  // 检查优惠券是否已被使用
-  if (coupon.times_redeemed && coupon.times_redeemed > 0) {
-    await db
-      .update(userCoupons)
-      .set({
-        status: "used",
-        usedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(userCoupons.stripeCouponId, coupon.id));
-  }
-}
-
-async function revokeMembershipCoupons(membershipId: number, reason: string) {
-  // 作废该会员的所有可用优惠券
-  const availableCoupons = await db.query.userCoupons.findMany({
-    where: and(
-      eq(userCoupons.membershipId, membershipId),
-      eq(userCoupons.status, "available")
-    ),
-  });
-
-  for (const coupon of availableCoupons) {
-    try {
-      // 在 Stripe 中删除优惠券
-      await stripe.coupons.del(coupon.stripeCouponId);
-    } catch (error) {
-      console.error(
-        `Failed to delete Stripe coupon ${coupon.stripeCouponId}:`,
-        error
-      );
-      // 即使 Stripe 删除失败，也继续处理本地数据库
-    }
-
-    // 更新本地数据库状态为已作废
-    await db
-      .update(userCoupons)
-      .set({
-        status: "revoked",
-        updatedAt: new Date(),
-      })
-      .where(eq(userCoupons.id, coupon.id));
-  }
-
-  console.log(
-    `Revoked ${availableCoupons.length} coupons for membership ${membershipId}: ${reason}`
-  );
-}
-
-async function createMembershipCoupons(
-  userId: string,
-  membershipId: number,
-  stripeCustomerId: string
-) {
-  const COUPON_COUNT = 30;
-  const COUPON_VALIDITY_DAYS = 30;
-
-  // 获取所有普通商品的 Stripe Product ID
-  const oneTimeProducts = await db.query.products.findMany({
-    where: and(
-      eq(products.productType, "one_time"),
-      eq(products.isActive, true)
-    ),
-  });
-
-  const stripeProductIds = oneTimeProducts
-    .map((p) => p.stripeProductId)
-    .filter((id): id is string => id !== null);
-
-  for (let i = 0; i < COUPON_COUNT; i++) {
-    try {
-      // 在 Stripe 创建优惠券
-      const stripeCoupon = await stripe.coupons.create({
-        percent_off: 10,
-        duration: "once",
-        max_redemptions: 1,
-        redeem_by:
-          Math.floor(Date.now() / 1000) + COUPON_VALIDITY_DAYS * 24 * 60 * 60,
-        applies_to:
-          stripeProductIds.length > 0
-            ? { products: stripeProductIds }
-            : undefined,
-        metadata: {
-          userId,
-          membershipId: membershipId.toString(),
-        },
-      });
-
-      // 记录到本地数据库
-      await db.insert(userCoupons).values({
-        userId,
-        stripeCouponId: stripeCoupon.id,
-        couponCode: stripeCoupon.id,
-        stripeCustomerId,
-        percentOff: 10,
-        duration: "once",
-        status: "available",
-        expiresAt: new Date(
-          Date.now() + COUPON_VALIDITY_DAYS * 24 * 60 * 60 * 1000
-        ),
-        membershipId,
-      });
-    } catch (error) {
-      console.error(`Failed to create coupon ${i + 1}:`, error);
-    }
-  }
 }
 
 function formatShippingAddress(address?: Stripe.Address | null): string {

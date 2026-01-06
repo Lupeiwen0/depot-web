@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star, Check, Loader2 } from "lucide-react";
@@ -17,7 +18,7 @@ interface OrderItemReviewProps {
     content: string | null;
     createdAt: string;
   } | null;
-  canReview: boolean; // 只有已支付的订单才能评价
+  canReview: boolean;
 }
 
 export default function OrderItemReview({
@@ -27,6 +28,9 @@ export default function OrderItemReview({
   existingReview,
   canReview,
 }: OrderItemReviewProps) {
+  const t = useTranslations("order");
+  const tReview = useTranslations("review");
+  const tCommon = useTranslations("common");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(!!existingReview);
@@ -36,6 +40,10 @@ export default function OrderItemReview({
   const [hoverRating, setHoverRating] = useState(0);
   const [title, setTitle] = useState(existingReview?.title || "");
   const [content, setContent] = useState(existingReview?.content || "");
+
+  const getRatingText = (r: number) => {
+    return tReview(`ratings.${r}` as "ratings.1" | "ratings.2" | "ratings.3" | "ratings.4" | "ratings.5");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,19 +60,18 @@ export default function OrderItemReview({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "提交评价失败");
+        throw new Error(data.error || t("reviewFailed"));
       }
 
       setSubmitted(true);
       setShowForm(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "提交评价失败");
+      setError(err instanceof Error ? err.message : t("reviewFailed"));
     } finally {
       setLoading(false);
     }
   };
 
-  // 已评价 - 显示评价内容
   if (submitted || existingReview) {
     const review = existingReview || { rating, title, content, createdAt: new Date().toISOString() };
     return (
@@ -85,7 +92,7 @@ export default function OrderItemReview({
           </div>
           <span className="text-xs text-green-600 flex items-center gap-1">
             <Check className="h-3 w-3" />
-            已评价
+            {t("reviewed")}
           </span>
         </div>
         {(review.title || title) && (
@@ -98,16 +105,14 @@ export default function OrderItemReview({
     );
   }
 
-  // 不能评价（订单未支付）
   if (!canReview) {
     return (
       <p className="mt-2 text-xs text-muted-foreground">
-        订单完成支付后可评价
+        {t("canReviewAfterPay")}
       </p>
     );
   }
 
-  // 显示评价按钮或表单
   if (!showForm) {
     return (
       <Button
@@ -117,17 +122,16 @@ export default function OrderItemReview({
         className="mt-2"
       >
         <Star className="h-3.5 w-3.5 mr-1" />
-        评价商品
+        {t("reviewProduct")}
       </Button>
     );
   }
 
-  // 评价表单
   return (
     <form onSubmit={handleSubmit} className="mt-3 p-4 bg-slate-50 rounded-lg space-y-3">
       <div>
         <label className="block text-xs font-medium text-slate-700 mb-1">
-          评分
+          {tReview("rating")}
         </label>
         <div className="flex items-center gap-0.5">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -150,24 +154,20 @@ export default function OrderItemReview({
             </button>
           ))}
           <span className="ml-2 text-xs text-muted-foreground">
-            {rating === 5 && "非常满意"}
-            {rating === 4 && "满意"}
-            {rating === 3 && "一般"}
-            {rating === 2 && "不满意"}
-            {rating === 1 && "非常不满意"}
+            {getRatingText(rating)}
           </span>
         </div>
       </div>
 
       <div>
         <label className="block text-xs font-medium text-slate-700 mb-1">
-          标题（可选）
+          {tReview("ratingTitle")}
         </label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="一句话总结"
+          placeholder={tReview("ratingTitlePlaceholder")}
           className="w-full px-3 py-1.5 text-sm rounded border border-slate-200 bg-white focus:ring-2 focus:ring-primary focus:border-transparent"
           maxLength={100}
         />
@@ -175,12 +175,12 @@ export default function OrderItemReview({
 
       <div>
         <label className="block text-xs font-medium text-slate-700 mb-1">
-          评价内容
+          {tReview("content")}
         </label>
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="分享您的使用体验..."
+          placeholder={tReview("contentPlaceholder")}
           className="min-h-[60px] text-sm"
           maxLength={500}
         />
@@ -195,10 +195,10 @@ export default function OrderItemReview({
           {loading ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-              提交中...
+              {tReview("submitting")}
             </>
           ) : (
-            "提交评价"
+            tReview("submit")
           )}
         </Button>
         <Button
@@ -208,7 +208,7 @@ export default function OrderItemReview({
           onClick={() => setShowForm(false)}
           disabled={loading}
         >
-          取消
+          {tCommon("cancel")}
         </Button>
       </div>
     </form>

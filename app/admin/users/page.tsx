@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Users, ChevronLeft } from "lucide-react";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { getTranslations } from "next-intl/server";
 import UserList from "./UserList";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ async function getUsersData(cookie: string): Promise<UsersData> {
 export default async function AdminUsersPage() {
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("admin");
 
   const data = await getUsersData(cookie);
 
@@ -87,7 +89,7 @@ export default async function AdminUsersPage() {
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
         <div className="container mx-auto px-4 py-8 md:py-12">
           <div className="text-center py-10">
-            <p className="text-red-500">加载用户列表失败，请稍后重试</p>
+            <p className="text-red-500">{t("loadFailed")}</p>
           </div>
         </div>
       </main>
@@ -113,7 +115,7 @@ export default async function AdminUsersPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-slate-900 transition-colors mb-8"
         >
           <ChevronLeft className="h-4 w-4" />
-          返回商品管理
+          {t("backToProducts")}
         </Link>
 
         <div className="flex items-center justify-between mb-8">
@@ -122,8 +124,8 @@ export default async function AdminUsersPage() {
               <Users className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">用户管理</h1>
-              <p className="text-sm text-muted-foreground">管理平台用户账号</p>
+              <h1 className="text-2xl font-bold text-slate-900">{t("users.title")}</h1>
+              <p className="text-sm text-muted-foreground">{t("users.subtitle")}</p>
             </div>
           </div>
         </div>
@@ -131,19 +133,19 @@ export default async function AdminUsersPage() {
         {/* 统计卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl p-4 border shadow-sm">
-            <p className="text-sm text-muted-foreground">总用户</p>
+            <p className="text-sm text-muted-foreground">{t("users.stats.total")}</p>
             <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border shadow-sm">
-            <p className="text-sm text-green-600">正常</p>
+            <p className="text-sm text-green-600">{t("users.stats.active")}</p>
             <p className="text-2xl font-bold text-green-600">{stats.active}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border shadow-sm">
-            <p className="text-sm text-red-500">已禁用</p>
+            <p className="text-sm text-red-500">{t("users.stats.disabled")}</p>
             <p className="text-2xl font-bold text-red-400">{stats.disabled}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border shadow-sm">
-            <p className="text-sm text-blue-600">管理员</p>
+            <p className="text-sm text-blue-600">{t("users.stats.admin")}</p>
             <p className="text-2xl font-bold text-blue-600">{stats.admins}</p>
           </div>
         </div>

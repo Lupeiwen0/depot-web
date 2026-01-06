@@ -2,22 +2,30 @@
 
 import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { ArrowUpDown, TrendingUp, Star, Clock, DollarSign } from "lucide-react";
-
-const sortOptions = [
-  { value: "sales", label: "销量最高", icon: TrendingUp },
-  { value: "rating", label: "好评优先", icon: Star },
-  { value: "createdAt", label: "最新上架", icon: Clock },
-  { value: "price-asc", label: "价格从低到高", icon: DollarSign },
-  { value: "price-desc", label: "价格从高到低", icon: DollarSign },
-];
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export default function SortSelector() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("sort");
+
+  const sortOptions = [
+    { value: "sales", label: t("salesDesc") },
+    { value: "rating", label: t("ratingDesc") },
+    { value: "createdAt", label: t("newest") },
+    { value: "price-asc", label: t("priceAsc") },
+    { value: "price-desc", label: t("priceDesc") },
+  ];
 
   const currentSort = searchParams.get("sortBy") || "sales";
   const currentOrder = searchParams.get("sortOrder") || "desc";
@@ -45,32 +53,23 @@ export default function SortSelector() {
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-muted-foreground mr-1 flex items-center gap-1">
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground flex items-center gap-1">
         <ArrowUpDown className="h-4 w-4" />
-        排序:
+        {t("label")}:
       </span>
-      {sortOptions.map((option) => {
-        const Icon = option.icon;
-        const isActive = currentValue === option.value;
-        return (
-          <button
-            key={option.value}
-            onClick={() => handleSort(option.value)}
-            disabled={isPending}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-all",
-              "border shadow-sm hover:shadow-md",
-              isActive
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white/60 text-slate-700 border-white/40 hover:bg-white/80"
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {option.label}
-          </button>
-        );
-      })}
+      <Select value={currentValue} onValueChange={handleSort} disabled={isPending}>
+        <SelectTrigger className="w-[140px] bg-white/60 dark:bg-gray-800/60 border-white/40 dark:border-gray-600/40">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {sortOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

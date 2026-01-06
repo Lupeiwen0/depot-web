@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useCartDrawer } from "@/contexts/CartDrawerContext";
+import { useTranslations } from "next-intl";
 
 export type CartItem = {
   id: number;
@@ -42,8 +43,8 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
   const { isOpen, closeDrawer } = useCartDrawer();
   const [items, setItems] = useState<CartItem[]>(initialItems);
   const [loadingItems, setLoadingItems] = useState<Set<number>>(new Set());
+  const t = useTranslations("cart");
 
-  // 当 initialItems 变化时更新本地状态
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
@@ -64,7 +65,6 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
   const handleRemove = async (lineItemId: number) => {
     setLoadingItems((prev) => new Set(prev).add(lineItemId));
     await removeCartItem(lineItemId);
-    // 从本地状态移除
     setItems((prev) => prev.filter((item) => item.id !== lineItemId));
     setLoadingItems((prev) => {
       const next = new Set(prev);
@@ -85,10 +85,12 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" />
-            购物车
+            {t("title")}
           </SheetTitle>
           <SheetDescription>
-            {items.length > 0 ? `共 ${totalQuantity} 件商品` : "购物车是空的"}
+            {items.length > 0
+              ? t("totalItems", { count: totalQuantity })
+              : t("empty")}
           </SheetDescription>
         </SheetHeader>
 
@@ -98,10 +100,10 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
                 <span className="text-3xl">🛒</span>
               </div>
-              <h3 className="text-lg font-semibold mb-2">购物车是空的</h3>
-              <p className="text-muted-foreground mb-6">快去挑选心仪的商品吧</p>
+              <h3 className="text-lg font-semibold mb-2">{t("empty")}</h3>
+              <p className="text-muted-foreground mb-6">{t("emptyHint")}</p>
               <Button asChild onClick={closeDrawer}>
-                <Link href="/">继续购物</Link>
+                <Link href="/">{t("continueShopping")}</Link>
               </Button>
             </div>
           ) : (
@@ -179,24 +181,30 @@ export default function CartDrawer({ initialItems }: CartDrawerProps) {
           <div className="border-t pt-4 space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">商品数量</span>
-                <span className="font-medium">{totalQuantity} 件</span>
+                <span className="text-muted-foreground">{t("itemCount")}</span>
+                <span className="font-medium">
+                  {totalQuantity} {t("quantity")}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">商品小计</span>
+                <span className="text-muted-foreground">
+                  {t("itemSubtotal")}
+                </span>
                 <span className="font-medium">¥{total.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">运费</span>
-                <span className="font-medium text-green-600">免运费</span>
+                <span className="text-muted-foreground">{t("shipping")}</span>
+                <span className="font-medium text-green-600">
+                  {t("freeShipping")}
+                </span>
               </div>
               <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>应付总额</span>
+                <span>{t("totalAmount")}</span>
                 <span className="text-primary">¥{total.toFixed(2)}</span>
               </div>
             </div>
             <Button asChild className="w-full" size="lg" onClick={closeDrawer}>
-              <Link href="/checkout">去结算</Link>
+              <Link href="/checkout">{t("checkout")}</Link>
             </Button>
           </div>
         )}

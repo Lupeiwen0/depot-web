@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取所有标签（公共 API，无需认证）
 export async function GET() {
@@ -18,8 +19,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Get tags error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to get tags" },
+      { error: t("api.tag.getFailed") },
       { status: 500 }
     );
   }

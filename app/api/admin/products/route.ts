@@ -2,25 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, or, ilike, desc, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { products } from "@/db/schema";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-
-// 验证管理员权限
-async function verifyAdmin() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  if (session.user.role !== "admin") {
-    return { error: "Forbidden: Admin access required", status: 403 };
-  }
-
-  return { user: session.user };
-}
+import { verifyAdmin, getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取商品列表（管理后台）
 export async function GET(request: NextRequest) {
@@ -36,7 +18,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = Math.min(parseInt(searchParams.get("pageSize") || "50"), 100);
+    const pageSize = Math.min(
+      parseInt(searchParams.get("pageSize") || "50"),
+      100
+    );
     const sortBy = searchParams.get("sortBy") || "createdAt";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
@@ -54,7 +39,11 @@ export async function GET(request: NextRequest) {
     }
 
     // 排序
-    type SortableColumn = typeof products.title | typeof products.price | typeof products.createdAt | typeof products.salesCount;
+    type SortableColumn =
+      | typeof products.title
+      | typeof products.price
+      | typeof products.createdAt
+      | typeof products.salesCount;
     const sortFieldMap: Record<string, SortableColumn> = {
       title: products.title,
       price: products.price,
@@ -110,8 +99,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Get admin products error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to get products" },
+      { error: t("api.product.getFailed") },
       { status: 500 }
     );
   }
@@ -128,12 +118,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { t } = await getServerTranslations();
     const body = await request.json();
-    const { title, description, price, imageUrl, productType, tags, isActive } = body;
+    const { title, description, price, imageUrl, productType, tags, isActive } =
+      body;
 
     if (!title || !price) {
       return NextResponse.json(
-        { error: "title and price are required" },
+        { error: t("api.validation.titleAndPriceRequired") },
         { status: 400 }
       );
     }
@@ -145,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     if (existingProduct) {
       return NextResponse.json(
-        { error: "Product with this title already exists" },
+        { error: t("api.product.duplicateTitle") },
         { status: 409 }
       );
     }
@@ -179,8 +171,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Create product error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to create product" },
+      { error: t("api.product.createFailed") },
       { status: 500 }
     );
   }

@@ -1,9 +1,11 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { CheckCircle, Package, ShoppingBag } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 
-export default function PaymentSuccessPage() {
+export default async function PaymentSuccessPage() {
+  const t = await getTranslations("payment");
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-green-50 to-white flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center space-y-6">
@@ -19,9 +21,9 @@ export default function PaymentSuccessPage() {
         </div>
 
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">支付成功</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t("success")}</h1>
           <p className="text-gray-600">
-            感谢您的购买！您的订单已经确认。
+            {t("successHint")}
           </p>
         </div>
 
@@ -31,15 +33,15 @@ export default function PaymentSuccessPage() {
               <Package className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="font-medium text-gray-900">订单处理中</p>
+              <p className="font-medium text-gray-900">{t("orderProcessing")}</p>
               <p className="text-sm text-gray-500">
-                我们正在准备您的商品
+                {t("orderProcessingHint")}
               </p>
             </div>
           </div>
 
           <p className="text-sm text-gray-500">
-            您将收到一封确认邮件，其中包含订单详情和物流跟踪信息。
+            {t("emailNotice")}
           </p>
         </div>
 
@@ -47,13 +49,13 @@ export default function PaymentSuccessPage() {
           <Link href="/orders">
             <Button className="w-full sm:w-auto gap-2">
               <Package className="h-4 w-4" />
-              查看我的订单
+              {t("viewOrder")}
             </Button>
           </Link>
           <Link href="/">
             <Button variant="outline" className="w-full sm:w-auto gap-2">
               <ShoppingBag className="h-4 w-4" />
-              继续购物
+              {t("continueShopping")}
             </Button>
           </Link>
         </div>

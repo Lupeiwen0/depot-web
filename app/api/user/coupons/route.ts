@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, lt, sql } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { userCoupons } from "@/db/schema";
 import { auth } from "@/lib/auth";
@@ -30,10 +30,13 @@ export async function GET(request: NextRequest) {
         )
       );
 
-    // 获取用户所有优惠券
+    // 获取用户所有优惠券（包含使用的订单信息）
     const coupons = await db.query.userCoupons.findMany({
       where: eq(userCoupons.userId, session.user.id),
       orderBy: (userCoupons, { desc }) => [desc(userCoupons.createdAt)],
+      with: {
+        usedOrder: true,
+      },
     });
 
     // 统计各状态数量
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
         status: coupon.status,
         expiresAt: coupon.expiresAt.toISOString(),
         usedAt: coupon.usedAt?.toISOString() || null,
+        usedOrderId: coupon.usedOrderId,
         createdAt: coupon.createdAt.toISOString(),
       })),
       ...stats,

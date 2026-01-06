@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import OrderItemReview from "./OrderItemReview";
 import PayOrderButton from "../PayOrderButton";
@@ -69,6 +70,7 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("order");
 
   const data = await getOrderDetail(id, cookie);
 
@@ -82,16 +84,13 @@ export default async function OrderDetailPage({
 
   const order: Order = data.order;
 
-  // 检查订单是否已支付
   const isPaid = order.payments?.some((p) => p.status === "succeeded") || false;
 
   const total = order.items.reduce((sum, item) => {
     return sum + parseFloat(item.productPrice) * item.quantity;
   }, 0);
 
-  // 支付状态
   const getPaymentStatus = () => {
-    // 检查是否超时（30分钟）
     const now = new Date();
     const orderTime = new Date(order.createdAt);
     const diffMinutes = (now.getTime() - orderTime.getTime()) / (1000 * 60);
@@ -99,32 +98,42 @@ export default async function OrderDetailPage({
 
     if (!order.payments || order.payments.length === 0) {
       if (isExpired) {
-        return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+        return { label: t("status.cancelled"), className: "bg-gray-100 text-gray-700", canPay: false };
       }
-      return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+      return { label: t("status.pending"), className: "bg-yellow-100 text-yellow-700", canPay: true };
     }
     const latestPayment = order.payments[order.payments.length - 1];
     switch (latestPayment.status) {
       case "succeeded":
-        return { label: "已支付", className: "bg-green-100 text-green-700", canPay: false };
+        return { label: t("status.paid"), className: "bg-green-100 text-green-700", canPay: false };
       case "pending":
-        // 支付中状态，如果未超时可以重新发起支付
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return { label: t("status.cancelled"), className: "bg-gray-100 text-gray-700", canPay: false };
         }
-        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+        return { label: t("status.pending"), className: "bg-yellow-100 text-yellow-700", canPay: true };
       case "failed":
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return { label: t("status.cancelled"), className: "bg-gray-100 text-gray-700", canPay: false };
         }
-        return { label: "支付失败", className: "bg-red-100 text-red-700", canPay: true };
+        return { label: t("status.failed"), className: "bg-red-100 text-red-700", canPay: true };
       case "refunded":
-        return { label: "已退款", className: "bg-gray-100 text-gray-700", canPay: false };
+        return { label: t("status.refunded"), className: "bg-gray-100 text-gray-700", canPay: false };
       default:
         if (isExpired) {
-          return { label: "已取消", className: "bg-gray-100 text-gray-700", canPay: false };
+          return { label: t("status.cancelled"), className: "bg-gray-100 text-gray-700", canPay: false };
         }
-        return { label: "待支付", className: "bg-yellow-100 text-yellow-700", canPay: true };
+        return { label: t("status.pending"), className: "bg-yellow-100 text-yellow-700", canPay: true };
+    }
+  };
+
+  const getPaymentMethodLabel = (payType: string) => {
+    switch (payType) {
+      case "Credit card":
+        return t("creditCard");
+      case "Check":
+        return t("check");
+      default:
+        return t("purchaseOrder");
     }
   };
 
@@ -138,7 +147,7 @@ export default async function OrderDetailPage({
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           <ChevronLeft className="h-4 w-4" />
-          返回订单列表
+          {t("backToOrders")}
         </Link>
       </div>
 
@@ -146,7 +155,7 @@ export default async function OrderDetailPage({
         <div className="border-b pb-4 mb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">订单详情</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{t("orderDetail")}</h1>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${paymentStatus.className}`}>
                 {paymentStatus.label}
               </span>
@@ -156,51 +165,47 @@ export default async function OrderDetailPage({
             )}
           </div>
           <p className="text-sm text-gray-600 mt-1">
-            订单号: #{order.id}
+            {t("orderNo")}: #{order.id}
           </p>
           <p className="text-sm text-gray-600">
-            下单时间: {new Date(order.createdAt).toLocaleString("zh-CN")}
+            {t("orderTime")}: {new Date(order.createdAt).toLocaleString("zh-CN")}
           </p>
           {paymentStatus.canPay && (
             <p className="text-sm text-orange-600 mt-2">
-              请在 30 分钟内完成支付，超时订单将自动取消
+              {t("paymentTimeout")}
             </p>
           )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 mb-2">配送信息</h2>
+            <h2 className="text-sm font-semibold text-gray-900 mb-2">{t("shippingInfo")}</h2>
             <div className="space-y-1 text-sm">
               <p>
-                <span className="text-gray-600">收货人:</span>{" "}
+                <span className="text-gray-600">{t("recipient")}:</span>{" "}
                 <span className="font-medium">{order.name}</span>
               </p>
               <p>
-                <span className="text-gray-600">收货地址:</span>{" "}
+                <span className="text-gray-600">{t("address")}:</span>{" "}
                 <span className="font-medium">{order.address}</span>
               </p>
               <p>
-                <span className="text-gray-600">联系邮箱:</span>{" "}
+                <span className="text-gray-600">{t("email")}:</span>{" "}
                 <span className="font-medium">{order.email}</span>
               </p>
             </div>
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-gray-900 mb-2">支付信息</h2>
+            <h2 className="text-sm font-semibold text-gray-900 mb-2">{t("paymentInfo")}</h2>
             <div className="space-y-1 text-sm">
               <p>
-                <span className="text-gray-600">支付方式:</span>{" "}
+                <span className="text-gray-600">{t("paymentMethod")}:</span>{" "}
                 <span className="font-medium">
-                  {order.payType === "Credit card"
-                    ? "信用卡"
-                    : order.payType === "Check"
-                    ? "支票"
-                    : "采购订单"}
+                  {getPaymentMethodLabel(order.payType)}
                 </span>
               </p>
               <p>
-                <span className="text-gray-600">订单总额:</span>{" "}
+                <span className="text-gray-600">{t("totalAmount")}:</span>{" "}
                 <span className="font-bold text-primary">¥{total.toFixed(2)}</span>
               </p>
             </div>
@@ -208,7 +213,7 @@ export default async function OrderDetailPage({
         </div>
 
         <div className="border-t pt-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">商品清单</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t("productList")}</h2>
           <div className="space-y-6">
             {order.items.map((item) => (
               <div key={item.id} className="border-b pb-4 last:border-b-0">
@@ -229,21 +234,20 @@ export default async function OrderDetailPage({
                     </h3>
                     <div className="flex justify-between items-center mt-2">
                       <span className="text-sm text-gray-600">
-                        数量: {item.quantity}
+                        {t("quantity")}: {item.quantity}
                       </span>
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          单价: ¥{parseFloat(item.productPrice).toFixed(2)}
+                          {t("unitPrice")}: ¥{parseFloat(item.productPrice).toFixed(2)}
                         </p>
                         <p className="font-semibold text-primary">
-                          小计: ¥{(parseFloat(item.productPrice) * item.quantity).toFixed(2)}
+                          {t("itemSubtotal")}: ¥{(parseFloat(item.productPrice) * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 评价组件 */}
                 <OrderItemReview
                   orderId={order.id}
                   productId={item.productId}
@@ -257,10 +261,10 @@ export default async function OrderDetailPage({
           <div className="flex justify-end mt-4 pt-4 border-t">
             <div className="text-right">
               <p className="text-sm text-gray-600">
-                共 {order.items.reduce((sum, item) => sum + item.quantity, 0)} 件商品
+                {t("totalItems", { count: order.items.reduce((sum, item) => sum + item.quantity, 0) })}
               </p>
               <p className="text-xl font-bold text-gray-900 mt-1">
-                订单总额: <span className="text-primary">¥{total.toFixed(2)}</span>
+                {t("totalAmount")}: <span className="text-primary">¥{total.toFixed(2)}</span>
               </p>
             </div>
           </div>

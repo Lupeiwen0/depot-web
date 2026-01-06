@@ -15,6 +15,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import Decimal from "decimal.js";
 import type Stripe from "stripe";
+import { validateCoupon, calculateDiscountedTotal } from "@/lib/coupon-service";
 
 interface CreateSessionRequest {
   type?: "one_time" | "subscription";
@@ -24,7 +25,7 @@ interface CreateSessionRequest {
   priceId?: string;
   successUrl?: string;
   cancelUrl?: string;
-  couponCode?: string;
+  couponId?: number; // 改为优惠券ID
 }
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateSessionRequest = await request.json();
-    const { cartId, orderId, priceId, couponCode } = body;
+    const { cartId, orderId, priceId, couponId } = body;
     // 兼容 type 和 paymentType 两种参数名
     const type = body.type || body.paymentType || "one_time";
     // 默认的成功和取消 URL
@@ -218,33 +219,69 @@ export async function POST(request: NextRequest) {
         quantity: item.quantity,
       }));
 
-      // 计算总金额
-      const totalAmount = orderLineItems.reduce((sum, item) => {
+      // 计算总金额（原价）
+      const subtotal = orderLineItems.reduce((sum, item) => {
         return sum.plus(calculateItemTotal(item.product.price, item.quantity));
       }, new Decimal(0));
+
+      // 验证并应用优惠券
+      let validatedCoupon: { id: number; percentOff: number } | null = null;
+      let finalAmount = subtotal;
+
+      if (couponId) {
+        const coupon = await validateCoupon(session.user.id, couponId);
+        if (!coupon) {
+          return NextResponse.json(
+            { error: "优惠券无效或已过期" },
+            { status: 400 }
+          );
+        }
+        validatedCoupon = { id: coupon.id, percentOff: coupon.percentOff };
+        // 计算折后价格
+        finalAmount = new Decimal(
+          calculateDiscountedTotal(subtotal.toNumber(), coupon.percentOff)
+        );
+      }
+
+      // 如果有优惠券，则用折后价格重建 line_items
+      let finalLineItems = stripeLineItems;
+      if (validatedCoupon) {
+        // 使用单个 line item 显示折后总价
+        finalLineItems = [
+          {
+            price_data: {
+              currency: STRIPE_CONFIG.currency,
+              product_data: {
+                name: `订单支付（已使用${validatedCoupon.percentOff}%折扣）`,
+                description: orderLineItems
+                  .map((item) => `${item.product.title} x ${item.quantity}`)
+                  .join(", "),
+                images: undefined,
+              },
+              unit_amount: toStripeAmount(finalAmount.toFixed(2)),
+            },
+            quantity: 1,
+          },
+        ];
+      }
 
       // 创建 Checkout Session 配置
       const checkoutConfig: Stripe.Checkout.SessionCreateParams = {
         customer: stripeCustomer.stripeCustomerId,
         client_reference_id: session.user.id,
         mode: "payment",
-        line_items: stripeLineItems,
+        line_items: finalLineItems,
         success_url: successUrl,
         cancel_url: cancelUrl,
-        allow_promotion_codes: true,
         metadata: {
           [metadataType]: metadataId,
           userId: session.user.id,
           type: "one_time",
+          ...(validatedCoupon
+            ? { couponId: validatedCoupon.id.toString() }
+            : {}),
         },
       };
-
-      // 如果有优惠券代码，添加到 discounts
-      if (couponCode) {
-        checkoutConfig.discounts = [{ coupon: couponCode }];
-        // 使用 discounts 时不能同时使用 allow_promotion_codes
-        checkoutConfig.allow_promotion_codes = undefined;
-      }
 
       // 创建 Checkout Session
       const checkoutSession = await stripe.checkout.sessions.create(
@@ -257,10 +294,19 @@ export async function POST(request: NextRequest) {
         orderId: orderId || undefined,
         stripeCheckoutSessionId: checkoutSession.id,
         paymentType: "one_time",
-        amount: totalAmount.toFixed(2),
+        amount: finalAmount.toFixed(2),
         currency: STRIPE_CONFIG.currency,
         status: "pending",
-        metadata: JSON.stringify({ [metadataType]: metadataId }),
+        metadata: JSON.stringify({
+          [metadataType]: metadataId,
+          ...(validatedCoupon
+            ? {
+                couponId: validatedCoupon.id,
+                originalAmount: subtotal.toFixed(2),
+                discountPercent: validatedCoupon.percentOff,
+              }
+            : {}),
+        }),
       });
 
       return NextResponse.json({

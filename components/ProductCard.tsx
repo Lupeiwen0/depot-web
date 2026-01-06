@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useSession } from "@/lib/auth-client";
+import { useTranslations } from "next-intl";
 import { addToCart } from "@/app/actions/cart";
 import { useState } from "react";
 import {
@@ -37,6 +38,7 @@ export default function ProductCard({
   isInCart?: boolean;
 }) {
   const { data: session } = useSession();
+  const t = useTranslations("home");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -53,13 +55,13 @@ export default function ProductCard({
     try {
       const result = await addToCart(product.id);
       if (result.success) {
-        setMessage("已添加");
+        setMessage(t("added"));
         setTimeout(() => setMessage(""), 2000);
       } else {
-        setMessage(result.error || "失败");
+        setMessage(result.error || t("failed"));
       }
     } catch (error) {
-      setMessage("出错");
+      setMessage(t("error"));
     } finally {
       setLoading(false);
     }
@@ -79,11 +81,25 @@ export default function ProductCard({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
-              暂无图片
+              {t("noImage")}
             </div>
           )}
           {/* Overlay gradient for text readability if needed, or just cool effect */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/0 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-10" />
+
+          {/* 商品标签 - 固定在图片左上角 */}
+          {product.tags && product.tags.length > 0 && (
+            <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5">
+              {product.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center rounded-full bg-white/95 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-primary shadow-lg ring-1 ring-black/5"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* 已添加标识 - 固定在右上角 */}
           {isInCart && (
@@ -103,7 +119,7 @@ export default function ProductCard({
                   />
                 </svg>
                 <span className="text-xs font-semibold text-white tracking-wide">
-                  已添加
+                  {t("added")}
                 </span>
               </div>
             </div>
@@ -112,20 +128,6 @@ export default function ProductCard({
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col gap-1.5 p-4">
-        {/* 标签显示 */}
-        {product.tags && product.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 -mt-0.5 mb-0.5">
-            {product.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="line-clamp-1 text-lg font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
             {product.title}
@@ -158,7 +160,7 @@ export default function ProductCard({
               </>
             )}
           </div>
-          <span>已售 {product.salesCount || 0}</span>
+          <span>{t("salesCount", { count: product.salesCount || 0 })}</span>
         </div>
 
         <div className="mt-2 flex items-baseline gap-1">
@@ -178,12 +180,12 @@ export default function ProductCard({
           {loading ? (
             <span className="flex items-center gap-2">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              添加中...
+              {t("adding")}
             </span>
           ) : (
             <span className="flex items-center gap-2">
               <ShoppingCart className="h-4 w-4" />
-              加入购物车
+              {t("addToCart")}
             </span>
           )}
         </Button>

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ async function verifyAdminAccess(cookie: string) {
 export default async function NewProductPage() {
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("admin.products");
 
   const result = await verifyAdminAccess(cookie);
 
@@ -41,7 +43,7 @@ export default async function NewProductPage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">添加商品</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">{t("addProduct")}</h1>
       <ProductForm />
     </main>
   );

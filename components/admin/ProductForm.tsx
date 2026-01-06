@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createProduct, updateProduct } from "@/app/actions/products";
 import Link from "next/link";
 import TagSelector from "./TagSelector";
@@ -19,6 +20,8 @@ type Product = {
 
 export default function ProductForm({ product }: { product?: Product }) {
   const router = useRouter();
+  const t = useTranslations("admin.products");
+  const tCommon = useTranslations("common");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>(
@@ -38,7 +41,7 @@ export default function ProductForm({ product }: { product?: Product }) {
     if (result.success) {
       router.push("/admin/products");
     } else {
-      setError(result.error || "操作失败");
+      setError(result.error || t("saveFailed"));
       setLoading(false);
     }
   };
@@ -57,7 +60,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             htmlFor="title"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            商品名称 *
+            {t("productNameRequired")}
           </label>
           <input
             type="text"
@@ -66,7 +69,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             required
             defaultValue={product?.title}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="请输入商品名称"
+            placeholder={t("productNamePlaceholder")}
           />
         </div>
 
@@ -75,7 +78,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             htmlFor="description"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            商品描述
+            {t("productDescription")}
           </label>
           <textarea
             id="description"
@@ -83,7 +86,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             rows={4}
             defaultValue={product?.description || ""}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="请输入商品描述"
+            placeholder={t("productDescriptionPlaceholder")}
           />
         </div>
 
@@ -92,7 +95,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             htmlFor="imageUrl"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            图片链接
+            {t("productImage")}
           </label>
           <input
             type="url"
@@ -109,7 +112,7 @@ export default function ProductForm({ product }: { product?: Product }) {
             htmlFor="price"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            价格 *
+            {t("priceRequired")}
           </label>
           <input
             type="number"
@@ -135,13 +138,13 @@ export default function ProductForm({ product }: { product?: Product }) {
             disabled={loading}
             className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 font-medium"
           >
-            {loading ? "保存中..." : product ? "更新商品" : "创建商品"}
+            {loading ? tCommon("saving") : product ? t("editProduct") : t("addProduct")}
           </button>
           <Link
             href="/admin/products"
             className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 font-medium text-center"
           >
-            取消
+            {tCommon("cancel")}
           </Link>
         </div>
       </form>

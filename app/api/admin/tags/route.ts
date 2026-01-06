@@ -2,25 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql, arrayContains } from "drizzle-orm";
 import { db } from "@/db";
 import { productTags, products } from "@/db/schema";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-
-// 验证管理员权限
-async function verifyAdmin() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  if (session.user.role !== "admin") {
-    return { error: "Forbidden: Admin access required", status: 403 };
-  }
-
-  return { user: session.user };
-}
+import { verifyAdmin, getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取所有标签（管理后台）
 export async function GET() {
@@ -49,8 +31,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Get tags error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to get tags" },
+      { error: t("api.tag.getFailed") },
       { status: 500 }
     );
   }
@@ -67,12 +50,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { t } = await getServerTranslations();
     const body = await request.json();
     const { name, slug, description, color } = body;
 
     if (!name || !slug) {
       return NextResponse.json(
-        { error: "name and slug are required" },
+        { error: t("api.validation.nameAndSlugRequired") },
         { status: 400 }
       );
     }
@@ -84,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     if (existingTag) {
       return NextResponse.json(
-        { error: "Tag with this name already exists" },
+        { error: t("api.tag.duplicateName") },
         { status: 409 }
       );
     }
@@ -96,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     if (existingSlug) {
       return NextResponse.json(
-        { error: "Tag with this slug already exists" },
+        { error: t("api.tag.duplicateSlug") },
         { status: 409 }
       );
     }
@@ -123,8 +107,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Create tag error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to create tag" },
+      { error: t("api.tag.createFailed") },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Tag, ChevronLeft } from "lucide-react";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { getTranslations } from "next-intl/server";
 import TagList from "./TagList";
 import AddTagForm from "./AddTagForm";
 
@@ -43,6 +44,7 @@ async function getTagsData(cookie: string): Promise<TagsResponse> {
 export default async function AdminTagsPage() {
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("admin");
 
   const data = await getTagsData(cookie);
 
@@ -59,7 +61,7 @@ export default async function AdminTagsPage() {
       <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
         <div className="container mx-auto px-4 py-8 md:py-12">
           <div className="text-center py-10">
-            <p className="text-red-500">加载标签列表失败，请稍后重试</p>
+            <p className="text-red-500">{t("loadFailed")}</p>
           </div>
         </div>
       </main>
@@ -77,7 +79,7 @@ export default async function AdminTagsPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-slate-900 transition-colors mb-8"
         >
           <ChevronLeft className="h-4 w-4" />
-          返回商品管理
+          {t("backToProducts")}
         </Link>
 
         <div className="flex items-center justify-between mb-8">
@@ -86,9 +88,9 @@ export default async function AdminTagsPage() {
               <Tag className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">标签管理</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{t("tags.title")}</h1>
               <p className="text-sm text-muted-foreground">
-                共 {tags.length} 个标签
+                {t("tags.count", { count: tags.length })}
               </p>
             </div>
           </div>

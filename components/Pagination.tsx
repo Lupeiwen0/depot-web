@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export default function Pagination({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("pagination");
 
   const goToPage = useCallback(
     (newPage: number) => {
@@ -65,7 +67,7 @@ export default function Pagination({
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
       <p className="text-sm text-muted-foreground">
-        共 {total} 件商品，第 {page} / {totalPages} 页
+        {t("info", { total, page, totalPages })}
       </p>
 
       <div className="flex items-center gap-1">
@@ -77,7 +79,7 @@ export default function Pagination({
           className="h-9 px-3 rounded-lg bg-white/60 border-white/40"
         >
           <ChevronLeft className="h-4 w-4" />
-          <span className="hidden sm:inline ml-1">上一页</span>
+          <span className="hidden sm:inline ml-1">{t("prev")}</span>
         </Button>
 
         <div className="flex items-center gap-1 mx-2">
@@ -113,7 +115,7 @@ export default function Pagination({
           disabled={page >= totalPages || isPending}
           className="h-9 px-3 rounded-lg bg-white/60 border-white/40"
         >
-          <span className="hidden sm:inline mr-1">下一页</span>
+          <span className="hidden sm:inline mr-1">{t("next")}</span>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

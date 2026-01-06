@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Star, User, ThumbsUp, Flag, ChevronDown } from "lucide-react";
@@ -35,6 +36,8 @@ export default function ProductReviews({
   readOnly = false,
 }: ProductReviewsProps) {
   const { data: session } = useSession();
+  const t = useTranslations("review");
+  const tProduct = useTranslations("product");
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -54,8 +57,11 @@ export default function ProductReviews({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
+  // 防止重复请求
+  const hasFetched = useRef(false);
+
   // 获取评价列表
-  const fetchReviews = async (pageNum: number, append = false) => {
+  const fetchReviews = useCallback(async (pageNum: number, append = false) => {
     if (append) {
       setLoadingMore(true);
     } else {
@@ -64,7 +70,7 @@ export default function ProductReviews({
 
     try {
       const res = await fetch(
-        `/api/products/${productId}/reviews?page=${pageNum}&pageSize=5`
+        `/api/products/${productId}/reviews?page=${pageNum}&pageSize=50`
       );
       const data = await res.json();
 
@@ -88,11 +94,14 @@ export default function ProductReviews({
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [productId]);
 
   useEffect(() => {
+    // 防止 React Strict Mode 下重复请求
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     fetchReviews(1);
-  }, [productId]);
+  }, [fetchReviews]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -129,6 +138,7 @@ export default function ProductReviews({
       setContent("");
       setShowForm(false);
       setPage(1);
+      hasFetched.current = false;
       fetchReviews(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交评价失败");
@@ -161,7 +171,7 @@ export default function ProductReviews({
             ))}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {statsCount} 条评价
+            {t("reviewsCount", { count: statsCount })}
           </p>
         </div>
 
@@ -169,8 +179,8 @@ export default function ProductReviews({
           <div className="flex-1">
             <p className="text-slate-600 mb-4">
               {session?.user
-                ? "购买商品后可在订单详情中发表评价"
-                : "登录并购买商品后可发表评价"}
+                ? t("reviewHintLoggedIn")
+                : t("reviewHintGuest")}
             </p>
           </div>
         )}
@@ -184,7 +194,7 @@ export default function ProductReviews({
         >
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              评分
+              {t("rating")}
             </label>
             <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
@@ -207,24 +217,20 @@ export default function ProductReviews({
                 </button>
               ))}
               <span className="ml-2 text-sm text-muted-foreground">
-                {rating === 5 && "非常满意"}
-                {rating === 4 && "满意"}
-                {rating === 3 && "一般"}
-                {rating === 2 && "不满意"}
-                {rating === 1 && "非常不满意"}
+                {t(`ratings.${rating}`)}
               </span>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              标题（可选）
+              {t("ratingTitle")}
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="用一句话总结您的评价"
+              placeholder={t("ratingTitlePlaceholder")}
               className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white/80 focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               maxLength={100}
             />
@@ -232,12 +238,12 @@ export default function ProductReviews({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              评价内容
+              {t("content")}
             </label>
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="分享您的使用体验..."
+              placeholder={t("contentPlaceholder")}
               className="min-h-[120px] bg-white/80"
               maxLength={1000}
             />
@@ -255,10 +261,10 @@ export default function ProductReviews({
               variant="outline"
               onClick={() => setShowForm(false)}
             >
-              取消
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "提交中..." : "提交评价"}
+              {submitting ? t("submitting") : t("submit")}
             </Button>
           </div>
         </form>
@@ -272,7 +278,7 @@ export default function ProductReviews({
           </div>
         ) : reviews.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p>暂无评价，成为第一个评价的用户吧！</p>
+            <p>{t("noReviews")}</p>
           </div>
         ) : (
           <>
@@ -289,11 +295,11 @@ export default function ProductReviews({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-900">
-                        {review.userName || "匿名用户"}
+                        {review.userName || tProduct("anonymous")}
                       </span>
                       {review.isVerifiedPurchase && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                          已购买
+                          {t("verified")}
                         </span>
                       )}
                       <span className="text-xs text-muted-foreground">
@@ -333,11 +339,11 @@ export default function ProductReviews({
                     <div className="flex items-center gap-4 mt-3">
                       <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-slate-900 transition-colors">
                         <ThumbsUp className="h-4 w-4" />
-                        <span>有用 ({review.helpfulCount})</span>
+                        <span>{t("helpful")} ({review.helpfulCount})</span>
                       </button>
                       <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-slate-900 transition-colors">
                         <Flag className="h-4 w-4" />
-                        <span>举报</span>
+                        <span>{t("report")}</span>
                       </button>
                     </div>
                   </div>
@@ -356,12 +362,12 @@ export default function ProductReviews({
                   {loadingMore ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      加载中...
+                      {t("loading")}
                     </>
                   ) : (
                     <>
                       <ChevronDown className="h-4 w-4" />
-                      加载更多评价
+                      {t("loadMore")}
                     </>
                   )}
                 </Button>

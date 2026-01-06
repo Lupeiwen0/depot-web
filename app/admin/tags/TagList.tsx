@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Trash2, Edit2, Tag } from "lucide-react";
 
@@ -20,10 +21,12 @@ interface TagListProps {
 
 export default function TagList({ tags }: TagListProps) {
   const router = useRouter();
+  const t = useTranslations("admin.tags");
+  const tCommon = useTranslations("common");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("确定要删除这个标签吗？")) return;
+    if (!confirm(t("deleteConfirm"))) return;
 
     setDeletingId(id);
     try {
@@ -35,10 +38,10 @@ export default function TagList({ tags }: TagListProps) {
         router.refresh();
       } else {
         const data = await res.json();
-        alert(data.error || "删除失败");
+        alert(data.error || t("deleteFailed"));
       }
     } catch {
-      alert("操作失败");
+      alert(tCommon("operationFailed"));
     } finally {
       setDeletingId(null);
     }
@@ -48,8 +51,8 @@ export default function TagList({ tags }: TagListProps) {
     return (
       <div className="bg-white rounded-xl border p-12 text-center">
         <Tag className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-900 mb-2">暂无标签</h3>
-        <p className="text-muted-foreground">使用左侧表单创建第一个标签</p>
+        <h3 className="text-lg font-medium text-slate-900 mb-2">{t("noTags")}</h3>
+        <p className="text-muted-foreground">{t("noTagsHint")}</p>
       </div>
     );
   }
@@ -82,7 +85,7 @@ export default function TagList({ tags }: TagListProps) {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">
-                  创建于 {new Date(tag.createdAt).toLocaleDateString("zh-CN")}
+                  {t("createdAt")} {new Date(tag.createdAt).toLocaleDateString("zh-CN")}
                 </p>
               </div>
             </div>

@@ -2,10 +2,11 @@ import ProductCardWrapper from "@/components/ProductCardWrapper";
 import ProductSearchBar from "@/components/ProductSearchBar";
 import TagFilter from "@/components/TagFilter";
 import SortSelector from "@/components/SortSelector";
-import Pagination from "@/components/Pagination";
+import ProductList from "@/components/ProductList";
 import { headers } from "next/headers";
 import { Suspense } from "react";
 import { fetchInternalApi, fetchInternalApiWithAuth } from "@/lib/api-utils";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ async function getProductsData(searchParams: SearchParams) {
   if (!res.ok) {
     return {
       products: [],
-      pagination: { page: 1, pageSize: 12, total: 0, totalPages: 0 },
+      pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
     };
   }
 
@@ -106,11 +107,12 @@ export default async function Home({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [{ products: allProducts, pagination }, tags, cartProductIds] =
+  const [{ products: allProducts, pagination }, tags, cartProductIds, t] =
     await Promise.all([
       getProductsData(params),
       getTagsData(),
       getCartProductIds(),
+      getTranslations("home"),
     ]);
 
   const hasFilters = params.search || params.tags;
@@ -121,34 +123,34 @@ export default async function Home({
       <section className="fixed top-0 left-0 w-full h-[85vh] flex items-center justify-center overflow-hidden">
         <div className="container relative z-10 mx-auto px-4 md:px-6">
           <div className="mx-auto flex max-w-4xl flex-col items-center text-center space-y-8 animate-fade-in-up">
-            <div className="inline-flex items-center rounded-full border border-white/40 bg-white/30 backdrop-blur-md px-4 py-1.5 text-sm font-medium text-slate-800 shadow-sm transition-colors cursor-default hover:bg-white/40">
+            <div className="inline-flex items-center rounded-full border border-white/40 bg-white/30 backdrop-blur-md px-4 py-1.5 text-sm font-medium text-slate-800 shadow-sm transition-colors cursor-default hover:bg-white/40 dark:border-white/20 dark:bg-white/10 dark:text-slate-200">
               <span className="mr-2">✨</span>
-              <span>全场商品限时特惠，品质好物等你发现</span>
+              <span>{t("heroTag")}</span>
             </div>
 
-            <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 drop-shadow-sm leading-tight">
-              探索极简主义生活
+            <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 drop-shadow-sm leading-tight">
+              {t("heroTitle")}
             </h1>
 
-            <p className="max-w-[700px] text-lg text-slate-700 md:text-2xl/relaxed font-medium tracking-wide">
-              为您精选全球高品质设计好物,提升生活格调。让每一次日常,都成为一种享受。
+            <p className="max-w-[700px] text-lg text-slate-700 dark:text-slate-300 md:text-2xl/relaxed font-medium tracking-wide">
+              {t("heroSubtitle")}
             </p>
           </div>
         </div>
       </section>
 
       {/* Product List Overlay */}
-      <div className="relative z-20 mt-[85vh] min-h-screen bg-white/40 backdrop-blur-2xl rounded-t-[3rem] border-t border-white/30 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.1)] transition-all">
+      <div className="relative z-20 mt-[85vh] min-h-screen bg-white/40 dark:bg-gray-900/40 backdrop-blur-2xl rounded-t-[3rem] border-t border-white/30 dark:border-white/10 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.1)] transition-all">
         <div className="container mx-auto px-4 py-8 md:pb-24">
           <div className="flex flex-col gap-4">
             {/* 标题 */}
-            <div className="flex items-center justify-between border-b border-slate-200/50 pb-4">
+            <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-slate-700/50 pb-4">
               <div className="flex items-baseline gap-3">
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-                  热门精选
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  {t("featuredTitle")}
                 </h2>
-                <p className="text-sm text-slate-600">
-                  为您推荐本季最受欢迎的单品
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {t("featuredSubtitle")}
                 </p>
               </div>
             </div>
@@ -167,22 +169,19 @@ export default async function Home({
                   </Suspense>
                 </div>
 
-                {/* 标签过滤 */}
-                <div className="flex-1 min-w-0">
+                {/* 标签和排序 - 靠右 */}
+                <div className="flex-1 flex justify-end items-center gap-4">
                   <Suspense
                     fallback={
-                      <div className="h-8 bg-white/40 rounded-full w-64 animate-pulse" />
+                      <div className="h-8 bg-white/40 rounded-full w-32 animate-pulse" />
                     }
                   >
                     <TagFilter tags={tags} />
                   </Suspense>
-                </div>
 
-                {/* 排序选择器 */}
-                <div className="flex-shrink-0">
                   <Suspense
                     fallback={
-                      <div className="h-8 bg-white/40 rounded-full w-96 animate-pulse" />
+                      <div className="h-8 bg-white/40 rounded-full w-32 animate-pulse" />
                     }
                   >
                     <SortSelector />
@@ -193,64 +192,46 @@ export default async function Home({
 
             {/* 搜索结果统计 */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 {hasFilters ? (
-                  <span>
-                    找到{" "}
-                    <span className="font-semibold text-slate-900">
-                      {pagination.total}
-                    </span>{" "}
-                    件商品
-                  </span>
+                  <span>{t("foundProducts", { count: pagination.total })}</span>
                 ) : (
-                  <span>
-                    共{" "}
-                    <span className="font-semibold text-slate-900">
-                      {pagination.total}
-                    </span>{" "}
-                    件好物
-                  </span>
+                  <span>{t("totalProducts", { count: pagination.total })}</span>
                 )}
               </div>
             </div>
 
             {allProducts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-32 text-center rounded-3xl border border-dashed border-slate-300/50 bg-white/20">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/50 mb-6 shadow-sm">
+              <div className="flex flex-col items-center justify-center py-32 text-center rounded-3xl border border-dashed border-slate-300/50 dark:border-slate-600/50 bg-white/20 dark:bg-gray-800/20">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/50 dark:bg-gray-700/50 mb-6 shadow-sm">
                   <span className="text-4xl">🔍</span>
                 </div>
-                <h3 className="text-xl font-semibold text-slate-900">
-                  {hasFilters ? "未找到匹配的商品" : "暂无商品"}
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                  {hasFilters ? t("noProductsFound") : t("noProducts")}
                 </h3>
-                <p className="text-slate-500 mt-2 max-w-sm">
-                  {hasFilters
-                    ? "尝试调整搜索关键词或清除筛选条件"
-                    : "我们正在快马加鞭为您准备新品，敬请期待！"}
+                <p className="text-slate-500 dark:text-slate-400 mt-2 max-w-sm">
+                  {hasFilters ? t("noProductsHint") : t("noProductsWait")}
                 </p>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {allProducts.map((product, index) => (
-                    <ProductCardWrapper
-                      key={product.id}
-                      product={product}
-                      index={index}
-                      isInCart={cartProductIds.includes(product.id)}
-                    />
-                  ))}
-                </div>
-
-                {/* 分页 */}
-                <Suspense fallback={null}>
-                  <Pagination
-                    page={pagination.page}
-                    pageSize={pagination.pageSize}
-                    total={pagination.total}
-                    totalPages={pagination.totalPages}
-                  />
-                </Suspense>
-              </>
+              <Suspense
+                fallback={
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {[...Array(8)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-[480px] rounded-xl bg-white/40 animate-pulse"
+                      />
+                    ))}
+                  </div>
+                }
+              >
+                <ProductList
+                  initialProducts={allProducts}
+                  initialPagination={pagination}
+                  cartProductIds={cartProductIds}
+                />
+              </Suspense>
             )}
           </div>
         </div>

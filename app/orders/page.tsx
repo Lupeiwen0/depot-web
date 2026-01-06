@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { fetchInternalApiWithAuth } from "@/lib/api-utils";
 import DeleteOrderButton from "./DeleteOrderButton";
 import PayOrderButton from "./PayOrderButton";
@@ -39,7 +40,7 @@ async function getOrdersData(cookie: string) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      return null; // 未登录
+      return null;
     }
     return { orders: [] };
   }
@@ -50,6 +51,7 @@ async function getOrdersData(cookie: string) {
 export default async function OrdersPage() {
   const headersList = await headers();
   const cookie = headersList.get("cookie") || "";
+  const t = await getTranslations("order");
 
   const data = await getOrdersData(cookie);
 
@@ -63,7 +65,6 @@ export default async function OrdersPage() {
     orderPayments: Payment[],
     orderCreatedAt: string
   ) => {
-    // 检查是否超时（30分钟）
     const now = new Date();
     const orderTime = new Date(orderCreatedAt);
     const diffMinutes = (now.getTime() - orderTime.getTime()) / (1000 * 60);
@@ -72,13 +73,13 @@ export default async function OrdersPage() {
     if (!orderPayments || orderPayments.length === 0) {
       if (isExpired) {
         return {
-          label: "已取消",
+          label: t("status.cancelled"),
           className: "bg-gray-100 text-gray-700",
           canPay: false,
         };
       }
       return {
-        label: "待支付",
+        label: t("status.pending"),
         className: "bg-yellow-100 text-yellow-700",
         canPay: true,
       };
@@ -87,74 +88,84 @@ export default async function OrdersPage() {
     switch (latestPayment.status) {
       case "succeeded":
         return {
-          label: "已支付",
+          label: t("status.paid"),
           className: "bg-green-100 text-green-700",
           canPay: false,
         };
       case "pending":
-        // 支付中状态，如果未超时可以重新发起支付
         if (isExpired) {
           return {
-            label: "已取消",
+            label: t("status.cancelled"),
             className: "bg-gray-100 text-gray-700",
             canPay: false,
           };
         }
         return {
-          label: "待支付",
+          label: t("status.pending"),
           className: "bg-yellow-100 text-yellow-700",
           canPay: true,
         };
       case "failed":
         if (isExpired) {
           return {
-            label: "已取消",
+            label: t("status.cancelled"),
             className: "bg-gray-100 text-gray-700",
             canPay: false,
           };
         }
         return {
-          label: "支付失败",
+          label: t("status.failed"),
           className: "bg-red-100 text-red-700",
           canPay: true,
         };
       case "refunded":
         return {
-          label: "已退款",
+          label: t("status.refunded"),
           className: "bg-gray-100 text-gray-700",
           canPay: false,
         };
       default:
         if (isExpired) {
           return {
-            label: "已取消",
+            label: t("status.cancelled"),
             className: "bg-gray-100 text-gray-700",
             canPay: false,
           };
         }
         return {
-          label: "待支付",
+          label: t("status.pending"),
           className: "bg-yellow-100 text-yellow-700",
           canPay: true,
         };
     }
   };
 
+  const getPaymentMethodLabel = (payType: string) => {
+    switch (payType) {
+      case "Credit card":
+        return t("creditCard");
+      case "Check":
+        return t("check");
+      default:
+        return t("purchaseOrder");
+    }
+  };
+
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen bg-muted/5">
-      <h1 className="text-3xl font-bold tracking-tight mb-8">我的订单</h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-8">{t("title")}</h1>
       {userOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-xl bg-muted/30 animate-fade-in">
           <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
             <span className="text-3xl">📦</span>
           </div>
-          <h2 className="text-xl font-semibold mb-2">暂无订单</h2>
-          <p className="text-muted-foreground mb-6">还没有购买记录哦</p>
+          <h2 className="text-xl font-semibold mb-2">{t("empty")}</h2>
+          <p className="text-muted-foreground mb-6">{t("emptyHint")}</p>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
           >
-            去购物
+            {t("goShopping")}
           </a>
         </div>
       ) : (
@@ -176,7 +187,7 @@ export default async function OrdersPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-lg font-bold">订单 #{order.id}</h3>
+                      <h3 className="text-lg font-bold">{t("orderPrefix")}{order.id}</h3>
                       {(() => {
                         const status = getPaymentStatus(
                           order.payments,
@@ -193,7 +204,7 @@ export default async function OrdersPage() {
                     </div>
 
                     <p className="text-sm text-muted-foreground">
-                      下单时间:{" "}
+                      {t("orderTime")}:{" "}
                       {new Date(order.createdAt).toLocaleString("zh-CN")}
                     </p>
                   </div>
@@ -211,7 +222,7 @@ export default async function OrdersPage() {
                       href={`/orders/${order.id}`}
                       className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
                     >
-                      查看详情
+                      {t("viewDetail")}
                     </Link>
                     <DeleteOrderButton orderId={order.id} />
                   </div>
@@ -221,13 +232,13 @@ export default async function OrdersPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">
-                        收货人
+                        {t("recipient")}
                       </p>
                       <p className="font-medium text-sm">{order.name}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">
-                        收货地址
+                        {t("address")}
                       </p>
                       <p
                         className="font-medium text-sm truncate"
@@ -238,7 +249,7 @@ export default async function OrdersPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">
-                        联系邮箱
+                        {t("email")}
                       </p>
                       <p
                         className="font-medium text-sm truncate"
@@ -249,20 +260,16 @@ export default async function OrdersPage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">
-                        支付方式
+                        {t("paymentMethod")}
                       </p>
                       <p className="font-medium text-sm">
-                        {order.payType === "Credit card"
-                          ? "信用卡"
-                          : order.payType === "Check"
-                          ? "支票"
-                          : "采购订单"}
+                        {getPaymentMethodLabel(order.payType)}
                       </p>
                     </div>
                   </div>
 
                   <div className="bg-muted/30 rounded-lg p-4">
-                    <p className="text-sm font-medium mb-3">商品清单</p>
+                    <p className="text-sm font-medium mb-3">{t("productList")}</p>
                     <div className="space-y-3">
                       {order.items.map((item) => (
                         <div
@@ -285,7 +292,7 @@ export default async function OrdersPage() {
                       ))}
                     </div>
                     <div className="flex justify-between text-lg font-bold mt-4 pt-4 border-t border-dashed">
-                      <span>订单总额</span>
+                      <span>{t("totalAmount")}</span>
                       <span className="text-primary">¥{total.toFixed(2)}</span>
                     </div>
                   </div>

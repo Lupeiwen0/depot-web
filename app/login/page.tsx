@@ -12,16 +12,21 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 export default function LoginPage() {
+  const t = useTranslations("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setResetSuccess("");
     setLoading(true);
 
     try {
@@ -30,18 +35,47 @@ export default function LoginPage() {
         password,
       });
 
-      // 检查登录是否成功
       if (result.error) {
-        setError(result.error.message || "登录失败，请检查邮箱和密码");
+        setError(result.error.message || t("loginFailed"));
         setLoading(false);
         return;
       }
 
-      // 登录成功后使用完整页面刷新，以触发服务端组件重新渲染
       window.location.href = "/";
     } catch (err: any) {
-      setError(err.message || "登录失败，请检查邮箱和密码");
+      setError(err.message || t("loginFailed"));
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError(t("enterEmailFirst"));
+      return;
+    }
+
+    setError("");
+    setResetSuccess("");
+    setResetLoading(true);
+
+    try {
+      const res = await fetch("/api/user/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || t("sendResetFailed"));
+      }
+
+      setResetSuccess(t("resetEmailSent"));
+    } catch (err: any) {
+      setError(err.message || t("sendResetFailedRetry"));
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -55,10 +89,10 @@ export default function LoginPage() {
       <Card className="w-full max-w-md relative z-10 shadow-xl border-t border-l border-white/20 bg-card/80 backdrop-blur-sm animate-scale-in">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight text-center">
-            欢迎回来
+            {t("welcomeBack")}
           </CardTitle>
           <p className="text-sm text-muted-foreground text-center">
-            输入您的邮箱和密码登录账号
+            {t("loginSubtitle")}
           </p>
         </CardHeader>
         <CardContent>
@@ -68,12 +102,17 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+            {resetSuccess && (
+              <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-600 font-medium animate-fade-in">
+                {resetSuccess}
+              </div>
+            )}
             <div className="space-y-2">
               <label
                 htmlFor="email"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                邮箱地址
+                {t("email")}
               </label>
               <Input
                 id="email"
@@ -81,7 +120,7 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder="name@example.com"
+                placeholder={t("emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-background/50"
@@ -93,11 +132,16 @@ export default function LoginPage() {
                   htmlFor="password"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  密码
+                  {t("password")}
                 </label>
-                <Link href="#" className="text-xs text-primary hover:underline">
-                  忘记密码?
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="text-xs text-primary hover:underline disabled:opacity-50"
+                >
+                  {resetLoading ? t("sendingReset") : t("forgotPassword")}
+                </button>
               </div>
               <Input
                 id="password"
@@ -105,7 +149,7 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 required
-                placeholder="••••••••"
+                placeholder={t("passwordPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-background/50"
@@ -120,22 +164,22 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-r-transparent"></span>
-                  登录中...
+                  {t("loggingIn")}
                 </>
               ) : (
-                "立 即 登 录"
+                t("loginButton")
               )}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4 border-t p-6 bg-muted/20">
           <div className="text-center text-sm text-muted-foreground">
-            还没有账号?{" "}
+            {t("noAccount")}{" "}
             <Link
               href="/register"
               className="text-primary font-semibold hover:underline underline-offset-4"
             >
-              注册新账号
+              {t("registerNow")}
             </Link>
           </div>
         </CardFooter>

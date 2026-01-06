@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 
@@ -11,6 +12,8 @@ interface DeleteOrderButtonProps {
 
 export default function DeleteOrderButton({ orderId }: DeleteOrderButtonProps) {
   const router = useRouter();
+  const t = useTranslations("order");
+  const tCommon = useTranslations("common");
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -25,10 +28,10 @@ export default function DeleteOrderButton({ orderId }: DeleteOrderButtonProps) {
         router.refresh();
       } else {
         const data = await res.json();
-        alert(data.error || "删除失败");
+        alert(data.error || tCommon("deleteFailed"));
       }
     } catch {
-      alert("操作失败");
+      alert(tCommon("operationFailed"));
     } finally {
       setLoading(false);
       setShowConfirm(false);
@@ -38,14 +41,14 @@ export default function DeleteOrderButton({ orderId }: DeleteOrderButtonProps) {
   if (showConfirm) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">确认删除?</span>
+        <span className="text-sm text-muted-foreground">{t("confirmDeleteOrder")}</span>
         <Button
           size="sm"
           variant="destructive"
           onClick={handleDelete}
           disabled={loading}
         >
-          {loading ? "删除中..." : "确认"}
+          {loading ? t("deleting") : tCommon("confirm")}
         </Button>
         <Button
           size="sm"
@@ -53,7 +56,7 @@ export default function DeleteOrderButton({ orderId }: DeleteOrderButtonProps) {
           onClick={() => setShowConfirm(false)}
           disabled={loading}
         >
-          取消
+          {tCommon("cancel")}
         </Button>
       </div>
     );

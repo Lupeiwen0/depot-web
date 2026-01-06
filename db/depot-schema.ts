@@ -277,25 +277,28 @@ export const userCoupons = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
 
-    // Stripe 优惠券信息
-    stripeCouponId: text("stripe_coupon_id").notNull().unique(),
-    couponCode: text("coupon_code").notNull(),
-    stripeCustomerId: text("stripe_customer_id").notNull(),
+    // 优惠券信息（本地管理，不依赖 Stripe）
+    couponCode: text("coupon_code").notNull().unique(), // 本地生成的唯一优惠券码
 
     // 优惠信息
     percentOff: integer("percent_off").default(10).notNull(), // 10% = 9折
-    duration: text("duration").default("once").notNull(),
 
     // 状态管理
     status: couponStatusEnum("status").default("available").notNull(),
     usedAt: timestamp("used_at"),
     expiresAt: timestamp("expires_at").notNull(), // 创建后30天
 
-    // 关联信息
-    membershipId: integer("membership_id").references(() => userMemberships.id, {
-      onDelete: "set null",
-    }),
-    paymentId: integer("payment_id").references(() => payments.id, {
+    // 关联信息 - 来源
+    membershipId: integer("membership_id").references(
+      () => userMemberships.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    membershipPeriodStart: timestamp("membership_period_start"), // 会员周期开始时间（用于幂等性检查）
+
+    // 关联信息 - 使用
+    usedOrderId: integer("used_order_id").references(() => orders.id, {
       onDelete: "set null",
     }),
 
@@ -308,6 +311,7 @@ export const userCoupons = pgTable(
       table.status,
       table.expiresAt
     ),
+    index("user_coupons_used_order_idx").on(table.usedOrderId),
   ]
 );
 
@@ -360,7 +364,10 @@ export const productReviews = pgTable(
       table.orderId,
       table.productId
     ),
-    index("product_reviews_product_status_idx").on(table.productId, table.status),
+    index("product_reviews_product_status_idx").on(
+      table.productId,
+      table.status
+    ),
     index("product_reviews_user_id_idx").on(table.userId),
   ]
 );
@@ -444,7 +451,7 @@ export const userStripeCustomersRelations = relations(
 );
 
 // Payments 关系
-export const paymentsRelations = relations(payments, ({ one, many }) => ({
+export const paymentsRelations = relations(payments, ({ one }) => ({
   user: one(user, {
     fields: [payments.userId],
     references: [user.id],
@@ -453,7 +460,6 @@ export const paymentsRelations = relations(payments, ({ one, many }) => ({
     fields: [payments.orderId],
     references: [orders.id],
   }),
-  coupons: many(userCoupons),
 }));
 
 // UserMemberships 关系
@@ -478,9 +484,9 @@ export const userCouponsRelations = relations(userCoupons, ({ one }) => ({
     fields: [userCoupons.membershipId],
     references: [userMemberships.id],
   }),
-  payment: one(payments, {
-    fields: [userCoupons.paymentId],
-    references: [payments.id],
+  usedOrder: one(orders, {
+    fields: [userCoupons.usedOrderId],
+    references: [orders.id],
   }),
 }));
 

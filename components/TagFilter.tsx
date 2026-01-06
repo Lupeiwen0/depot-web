@@ -2,9 +2,17 @@
 
 import { useCallback, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tag } from "lucide-react";
 
-interface Tag {
+interface TagType {
   id: number;
   name: string;
   slug: string;
@@ -12,7 +20,7 @@ interface Tag {
 }
 
 interface TagFilterProps {
-  tags: Tag[];
+  tags: TagType[];
 }
 
 export default function TagFilter({ tags }: TagFilterProps) {
@@ -20,83 +28,53 @@ export default function TagFilter({ tags }: TagFilterProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations("tags");
 
-  const selectedTags = (searchParams.get("tags") || "")
-    .split(",")
-    .filter(Boolean);
+  const selectedTag = searchParams.get("tags") || "all";
 
-  const toggleTag = useCallback(
-    (tagName: string) => {
+  const handleTagChange = useCallback(
+    (value: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      let newTags = [...selectedTags];
 
-      if (newTags.includes(tagName)) {
-        newTags = newTags.filter((t) => t !== tagName);
-      } else {
-        newTags.push(tagName);
-      }
-
-      if (newTags.length > 0) {
-        params.set("tags", newTags.join(","));
-      } else {
+      if (value === "all") {
         params.delete("tags");
+      } else {
+        params.set("tags", value);
       }
-      params.set("page", "1"); // 筛选时重置页码
+      params.set("page", "1");
 
       startTransition(() => {
         router.push(`${pathname}?${params.toString()}`, { scroll: false });
       });
     },
-    [pathname, router, searchParams, selectedTags]
+    [pathname, router, searchParams]
   );
-
-  const clearTags = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("tags");
-    params.set("page", "1");
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    });
-  }, [pathname, router, searchParams]);
 
   if (tags.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-muted-foreground mr-1">标签:</span>
-      {tags.map((tag) => {
-        const isSelected = selectedTags.includes(tag.name);
-        return (
-          <button
-            key={tag.id}
-            onClick={() => toggleTag(tag.name)}
-            disabled={isPending}
-            className={cn(
-              "inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-all",
-              "border shadow-sm hover:shadow-md",
-              isSelected
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-white/60 text-slate-700 border-white/40 hover:bg-white/80"
-            )}
-            style={
-              isSelected && tag.color
-                ? { backgroundColor: tag.color, borderColor: tag.color }
-                : undefined
-            }
-          >
-            {tag.name}
-          </button>
-        );
-      })}
-      {selectedTags.length > 0 && (
-        <button
-          onClick={clearTags}
-          disabled={isPending}
-          className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-        >
-          清除筛选
-        </button>
-      )}
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground flex items-center gap-1">
+        <Tag className="h-4 w-4" />
+        {t("label")}:
+      </span>
+      <Select
+        value={selectedTag}
+        onValueChange={handleTagChange}
+        disabled={isPending}
+      >
+        <SelectTrigger className="w-[120px] bg-white/60 border-white/40">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t("all")}</SelectItem>
+          {tags.map((tag) => (
+            <SelectItem key={tag.id} value={tag.name}>
+              {tag.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

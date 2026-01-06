@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { carts, lineItems, userCoupons } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { calculateDiscount } from "@/lib/coupon-service";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取结账页面数据（购物车商品和可用优惠券）
 export async function GET() {
@@ -12,8 +14,13 @@ export async function GET() {
       headers: await headers(),
     });
 
+    const { t } = await getServerTranslations();
+
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: t("api.auth.unauthorized") },
+        { status: 401 }
+      );
     }
 
     // 获取用户购物车
@@ -42,14 +49,23 @@ export async function GET() {
         eq(userCoupons.status, "available"),
         gt(userCoupons.expiresAt, new Date())
       ),
+      orderBy: (userCoupons, { asc }) => [asc(userCoupons.expiresAt)],
     });
 
-    const total = cartItems.reduce((sum, item) => {
+    const subtotal = cartItems.reduce((sum, item) => {
       return sum + parseFloat(item.product.price) * item.quantity;
     }, 0);
 
+    // 计算默认折扣（如果有可用优惠券则使用第一张）
+    const defaultCoupon = availableCoupons[0];
+    const discountAmount = defaultCoupon
+      ? calculateDiscount(subtotal, defaultCoupon.percentOff)
+      : 0;
+    const total = subtotal - discountAmount;
+
     return NextResponse.json({
       userEmail: session.user.email,
+      cartId: cart?.id,
       cartItems: cartItems.map((item) => ({
         id: item.id,
         productId: item.productId,
@@ -63,12 +79,15 @@ export async function GET() {
         couponCode: c.couponCode,
         percentOff: c.percentOff,
       })),
+      subtotal,
+      discountAmount,
       total,
     });
   } catch (error) {
     console.error("Get checkout data error:", error);
+    const { t } = await getServerTranslations();
     return NextResponse.json(
-      { error: "Failed to get checkout data" },
+      { error: t("api.checkout.getFailed") },
       { status: 500 }
     );
   }

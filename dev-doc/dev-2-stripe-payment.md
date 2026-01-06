@@ -15,7 +15,7 @@
 
 - ✅ 购物车商品单次支付（Stripe Checkout，新窗口跳转）
 - ✅ 会员订阅功能（月卡/年卡等周期性支付）
-- ✅ 会员优惠券系统（每月 30 张 9 折优惠券）
+- ✅ 会员优惠券系统（每月 20 张 9 折优惠券）
 - ✅ Webhook 事件处理（支付状态实时同步）
 - ✅ 支付状态轮询查询
 - ✅ 商品 Stripe 同步（自动创建 Product、Price、Payment Link）
@@ -950,7 +950,7 @@ sequenceDiagram
 
     W->>W: 绑定用户关系
     W->>W: 创建 user_memberships (active)
-    W->>W: 🆕 创建 30 张优惠券
+    W->>W: 🆕 创建 20 张优惠券
     W->>W: 更新 payment 状态
 ```
 
@@ -1917,7 +1917,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.com
 
 ### 10.2 订阅支付测试
 
-- 购买会员卡 → Stripe 支付 → 会员激活 → 30 张优惠券创建
+- 购买会员卡 → Stripe 支付 → 会员激活 → 20 张优惠券创建
 
 ### 10.3 优惠券使用测试
 
@@ -1929,7 +1929,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.com
 
 ### 10.5 订阅续费测试
 
-- 订阅续费成功 → 发放新的 30 张优惠券
+- 订阅续费成功 → 发放新的 20 张优惠券
 
 ### 10.6 Webhook 乱序测试
 

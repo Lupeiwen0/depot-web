@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2 } from "lucide-react";
 
@@ -9,6 +10,8 @@ interface PayOrderButtonProps {
 }
 
 export default function PayOrderButton({ orderId }: PayOrderButtonProps) {
+  const t = useTranslations("order");
+  const tPayment = useTranslations("payment");
   const [loading, setLoading] = useState(false);
 
   const handlePay = async () => {
@@ -26,16 +29,15 @@ export default function PayOrderButton({ orderId }: PayOrderButtonProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "创建支付会话失败");
+        alert(data.error || tPayment("paymentFailed"));
         return;
       }
 
-      // 跳转到 Stripe Checkout 页面
       if (data.url) {
         window.location.href = data.url;
       }
     } catch {
-      alert("支付请求失败");
+      alert(tPayment("paymentFailed"));
     } finally {
       setLoading(false);
     }
@@ -51,12 +53,12 @@ export default function PayOrderButton({ orderId }: PayOrderButtonProps) {
       {loading ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          处理中...
+          {t("paying")}
         </>
       ) : (
         <>
           <CreditCard className="h-4 w-4" />
-          去支付
+          {t("payNow")}
         </>
       )}
     </Button>

@@ -77,8 +77,24 @@
       radial-gradient(at 0% 100%, hsla(22, 100%, 77%, 1) 0px, transparent 50%),
       radial-gradient(at 80% 100%, hsla(242, 100%, 70%, 1) 0px, transparent 50%),
       radial-gradient(at 0% 0%, hsla(343, 100%, 76%, 1) 0px, transparent 50%);
-    background-attachment: fixed; /* Keen looking parallax-like effect */
+    background-attachment: fixed;
     min-height: 100vh;
+  }
+
+  .dark body,
+  html.dark body {
+    background-color: hsl(240 10% 3.9%);
+    background-image: radial-gradient(
+        at 40% 20%,
+        hsla(240, 60%, 25%, 0.4) 0px,
+        transparent 50%
+      ),
+      radial-gradient(at 80% 0%, hsla(260, 60%, 30%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsla(220, 60%, 20%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, hsla(280, 60%, 25%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsla(200, 60%, 20%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsla(250, 60%, 30%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 0% 0%, hsla(300, 60%, 25%, 0.4) 0px, transparent 50%);
   }
 }
 

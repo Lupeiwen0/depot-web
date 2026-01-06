@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { signUp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import {
 import Link from "next/link";
 
 export default function RegisterPage() {
+  const t = useTranslations("auth");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,17 +34,15 @@ export default function RegisterPage() {
         name,
       });
 
-      // 检查注册是否成功
       if (result.error) {
-        setError(result.error.message || "注册失败，请重试");
+        setError(result.error.message || t("registerFailed"));
         setLoading(false);
         return;
       }
 
-      // 注册成功后使用完整页面刷新，以触发服务端组件重新渲染
       window.location.href = "/";
     } catch (err: any) {
-      setError(err.message || "注册失败，请重试");
+      setError(err.message || t("registerFailed"));
       setLoading(false);
     }
   };
@@ -57,10 +57,10 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md relative z-10 shadow-xl border-t border-l border-white/20 bg-card/80 backdrop-blur-sm animate-scale-in">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight text-center">
-            创建一个新账号
+            {t("registerTitle")}
           </CardTitle>
           <p className="text-sm text-muted-foreground text-center">
-            输入您的信息以完成注册
+            {t("registerSubtitle")}
           </p>
         </CardHeader>
         <CardContent>
@@ -75,14 +75,14 @@ export default function RegisterPage() {
                 htmlFor="name"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                姓名
+                {t("name")}
               </label>
               <Input
                 id="name"
                 name="name"
                 type="text"
                 required
-                placeholder="请输入姓名"
+                placeholder={t("namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="bg-background/50"
@@ -93,7 +93,7 @@ export default function RegisterPage() {
                 htmlFor="email"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                邮箱地址
+                {t("email")}
               </label>
               <Input
                 id="email"
@@ -101,7 +101,7 @@ export default function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder="name@example.com"
+                placeholder={t("emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-background/50"
@@ -112,7 +112,7 @@ export default function RegisterPage() {
                 htmlFor="password"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                密码
+                {t("password")}
               </label>
               <Input
                 id="password"
@@ -120,7 +120,7 @@ export default function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 required
-                placeholder="••••••••"
+                placeholder={t("passwordPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-background/50"
@@ -135,22 +135,22 @@ export default function RegisterPage() {
               {loading ? (
                 <>
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-r-transparent"></span>
-                  注册中...
+                  {t("registering")}
                 </>
               ) : (
-                "立即注册"
+                t("registerButton")
               )}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4 border-t p-6 bg-muted/20">
           <div className="text-center text-sm text-muted-foreground">
-            已有账号?{" "}
+            {t("hasAccount")}{" "}
             <Link
               href="/login"
               className="text-primary font-semibold hover:underline underline-offset-4"
             >
-              直接登录
+              {t("loginNow")}
             </Link>
           </div>
         </CardFooter>
