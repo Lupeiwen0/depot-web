@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql, arrayContains } from "drizzle-orm";
 import { db } from "@/db";
 import { productTags, products } from "@/db/schema";
-import { verifyAdmin, getServerTranslations } from "@/lib/server-i18n";
+import { verifyAdmin } from "@/lib/admin-auth";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取所有标签（管理后台）
 export async function GET() {

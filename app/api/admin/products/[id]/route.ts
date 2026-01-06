@@ -2,28 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { products } from "@/db/schema";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { verifyAdmin } from "@/lib/admin-auth";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-// 验证管理员权限
-async function verifyAdmin() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  if (session.user.role !== "admin") {
-    return { error: "Forbidden: Admin access required", status: 403 };
-  }
-
-  return { user: session.user };
 }
 
 // GET - 获取单个商品详情
@@ -41,7 +23,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const productId = parseInt(id);
 
     if (isNaN(productId)) {
-      return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid product ID" },
+        { status: 400 }
+      );
     }
 
     const product = await db.query.products.findFirst({
@@ -96,7 +81,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const productId = parseInt(id);
 
     if (isNaN(productId)) {
-      return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid product ID" },
+        { status: 400 }
+      );
     }
 
     // 检查商品是否存在
@@ -109,7 +97,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const { title, description, price, imageUrl, productType, tags, isActive } = body;
+    const { title, description, price, imageUrl, productType, tags, isActive } =
+      body;
 
     // 如果修改标题，检查唯一性
     if (title && title !== existingProduct.title) {
@@ -184,7 +173,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const productId = parseInt(id);
 
     if (isNaN(productId)) {
-      return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid product ID" },
+        { status: 400 }
+      );
     }
 
     // 检查商品是否存在

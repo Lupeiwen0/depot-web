@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { user } from "@/db/auth-schema";
 import { eq } from "drizzle-orm";
-import { verifyAdmin, getServerTranslations } from "@/lib/server-i18n";
+import { verifyAdmin } from "@/lib/admin-auth";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 // PATCH - 切换用户角色
 export async function PATCH(

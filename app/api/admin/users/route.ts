@@ -2,27 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, or, ilike, desc, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { user, userMemberships } from "@/db/schema";
-import { auth } from "@/lib/auth";
+import { verifyAdmin } from "@/lib/admin-auth";
 import { headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 
 // 验证管理员权限
-async function verifyAdmin() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  if (session.user.role !== "admin") {
-    return { error: "Forbidden: Admin access required", status: 403 };
-  }
-
-  return { user: session.user };
-}
 
 // GET - 获取用户列表
 export async function GET(request: NextRequest) {
@@ -39,7 +24,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = Math.min(parseInt(searchParams.get("pageSize") || "20"), 100);
+    const pageSize = Math.min(
+      parseInt(searchParams.get("pageSize") || "20"),
+      100
+    );
     const sortBy = searchParams.get("sortBy") || "createdAt";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
@@ -49,16 +37,15 @@ export async function GET(request: NextRequest) {
     // 搜索（用户名或邮箱）
     if (search) {
       conditions.push(
-        or(
-          ilike(user.name, `%${search}%`),
-          ilike(user.email, `%${search}%`)
-        )
+        or(ilike(user.name, `%${search}%`), ilike(user.email, `%${search}%`))
       );
     }
 
     // 状态筛选
     if (status && ["active", "disabled", "deleted"].includes(status)) {
-      conditions.push(eq(user.status, status as "active" | "disabled" | "deleted"));
+      conditions.push(
+        eq(user.status, status as "active" | "disabled" | "deleted")
+      );
     }
 
     // 排序
@@ -93,15 +80,17 @@ export async function GET(request: NextRequest) {
 
     // 获取用户的会员状态
     const userIds = users.map((u) => u.id);
-    const memberships = userIds.length > 0
-      ? await db.query.userMemberships.findMany({
-          where: sql`${userMemberships.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
-        })
-      : [];
+    const memberships =
+      userIds.length > 0
+        ? await db.query.userMemberships.findMany({
+            where: sql`${userMemberships.userId} IN (${sql.join(
+              userIds.map((id) => sql`${id}`),
+              sql`, `
+            )})`,
+          })
+        : [];
 
-    const membershipMap = new Map(
-      memberships.map((m) => [m.userId, m.status])
-    );
+    const membershipMap = new Map(memberships.map((m) => [m.userId, m.status]));
 
     const totalPages = Math.ceil(total / pageSize);
 
@@ -128,10 +117,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Get users error:", error);
-    return NextResponse.json(
-      { error: "Failed to get users" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to get users" }, { status: 500 });
   }
 }
 

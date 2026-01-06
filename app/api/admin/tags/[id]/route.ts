@@ -2,25 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql, arrayContains } from "drizzle-orm";
 import { db } from "@/db";
 import { productTags, products } from "@/db/schema";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-
-// 验证管理员权限
-async function verifyAdmin() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user) {
-    return { error: "Unauthorized", status: 401 };
-  }
-
-  if (session.user.role !== "admin") {
-    return { error: "Forbidden: Admin access required", status: 403 };
-  }
-
-  return { user: session.user };
-}
+import { verifyAdmin } from "@/lib/admin-auth";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -87,7 +69,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .set({
         name: name ?? existingTag.name,
         slug: slug ?? existingTag.slug,
-        description: description !== undefined ? description : existingTag.description,
+        description:
+          description !== undefined ? description : existingTag.description,
         color: color ?? existingTag.color,
         updatedAt: new Date(),
       })
