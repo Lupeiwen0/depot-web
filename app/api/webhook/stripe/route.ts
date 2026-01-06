@@ -297,9 +297,35 @@ async function handleCheckoutSessionCompleted(
 
     // 获取订阅详情以获取周期信息
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    const periodStart = new Date(
-      (subscription as any).current_period_start * 1000
-    );
+
+    // 验证并转换周期时间，防止无效日期导致 toISOString 报错
+    const rawPeriodStart = (subscription as any).current_period_start;
+    const rawPeriodEnd = (subscription as any).current_period_end;
+
+    if (!rawPeriodStart || typeof rawPeriodStart !== "number") {
+      console.error(
+        "Invalid current_period_start in subscription",
+        subscriptionId,
+        rawPeriodStart
+      );
+    }
+    if (!rawPeriodEnd || typeof rawPeriodEnd !== "number") {
+      console.error(
+        "Invalid current_period_end in subscription",
+        subscriptionId,
+        rawPeriodEnd
+      );
+    }
+
+    // 使用有效的时间戳，如果无效则回退到当前时间
+    const periodStart =
+      rawPeriodStart && typeof rawPeriodStart === "number"
+        ? new Date(rawPeriodStart * 1000)
+        : new Date();
+    const periodEnd =
+      rawPeriodEnd && typeof rawPeriodEnd === "number"
+        ? new Date(rawPeriodEnd * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 默认30天后
 
     // 创建或更新会员记录
     let membership = await db.query.userMemberships.findFirst({
@@ -316,9 +342,7 @@ async function handleCheckoutSessionCompleted(
           stripePriceId: priceId,
           status: "active",
           currentPeriodStart: periodStart,
-          currentPeriodEnd: new Date(
-            (subscription as any).current_period_end * 1000
-          ),
+          currentPeriodEnd: periodEnd,
         })
         .returning();
       membership = newMembership;
@@ -352,24 +376,30 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     status = "pending";
   }
 
+  // 验证周期时间有效性
+  const rawPeriodStart = (subscription as any).current_period_start;
+  const rawPeriodEnd = (subscription as any).current_period_end;
+  const updateData: Partial<typeof userMemberships.$inferInsert> = {
+    status,
+    cancelAt: subscription.cancel_at
+      ? new Date(subscription.cancel_at * 1000)
+      : null,
+    canceledAt: subscription.canceled_at
+      ? new Date(subscription.canceled_at * 1000)
+      : null,
+    updatedAt: new Date(),
+  };
+
+  if (rawPeriodStart && typeof rawPeriodStart === "number") {
+    updateData.currentPeriodStart = new Date(rawPeriodStart * 1000);
+  }
+  if (rawPeriodEnd && typeof rawPeriodEnd === "number") {
+    updateData.currentPeriodEnd = new Date(rawPeriodEnd * 1000);
+  }
+
   await db
     .update(userMemberships)
-    .set({
-      status,
-      currentPeriodStart: new Date(
-        (subscription as any).current_period_start * 1000
-      ),
-      currentPeriodEnd: new Date(
-        (subscription as any).current_period_end * 1000
-      ),
-      cancelAt: subscription.cancel_at
-        ? new Date(subscription.cancel_at * 1000)
-        : null,
-      canceledAt: subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000)
-        : null,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(userMemberships.id, membership.id));
 }
 
@@ -409,20 +439,34 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     if (membership) {
       // 获取当前订阅周期开始时间
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const periodStart = new Date(
-        (subscription as any).current_period_start * 1000
-      );
+      const rawPeriodStart = (subscription as any).current_period_start;
+      const rawPeriodEnd = (subscription as any).current_period_end;
+
+      // 验证时间有效性
+      if (!rawPeriodStart || typeof rawPeriodStart !== "number") {
+        console.error(
+          "Invalid current_period_start in subscription",
+          subscriptionId,
+          rawPeriodStart
+        );
+        return; // 跳过此次处理
+      }
+
+      const periodStart = new Date(rawPeriodStart * 1000);
 
       // 更新会员周期信息
+      const updateData: Partial<typeof userMemberships.$inferInsert> = {
+        currentPeriodStart: periodStart,
+        updatedAt: new Date(),
+      };
+
+      if (rawPeriodEnd && typeof rawPeriodEnd === "number") {
+        updateData.currentPeriodEnd = new Date(rawPeriodEnd * 1000);
+      }
+
       await db
         .update(userMemberships)
-        .set({
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: new Date(
-            (subscription as any).current_period_end * 1000
-          ),
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(userMemberships.id, membership.id));
 
       // 发放优惠券（幂等性检查内置于服务中）
