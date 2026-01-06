@@ -21,10 +21,6 @@ jest.mock("@/lib/auth", () => ({
   },
 }));
 
-jest.mock("next/headers", () => ({
-  headers: jest.fn().mockResolvedValue(new Headers()),
-}));
-
 // Mock db
 const mockTags = [
   {
@@ -147,7 +143,7 @@ describe("Admin Tags API", () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toContain("required");
+      expect(data.error).toContain("必填");
     });
 
     it("should reject duplicate tag name", async () => {
@@ -166,7 +162,7 @@ describe("Admin Tags API", () => {
       const data = await response.json();
 
       expect(response.status).toBe(409);
-      expect(data.error).toContain("already exists");
+      expect(data.error).toContain("已存在");
     });
 
     it("should require admin role", async () => {

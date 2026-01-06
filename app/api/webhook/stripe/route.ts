@@ -23,6 +23,38 @@ import { sql } from "drizzle-orm";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+function unixSecondsToDate(value: unknown): Date | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value * 1000);
+  }
+  return null;
+}
+
+function getSubscriptionPeriodFromFirstItem(
+  subscription: Stripe.Subscription
+): {
+  rawPeriodStart: unknown;
+  rawPeriodEnd: unknown;
+  startDate: Date | null;
+  endDate: Date | null;
+  priceId: string | null;
+} {
+  const firstItem = (subscription as any)?.items?.data?.[0];
+
+  // Stripe 不同 API 版本下，周期字段可能在 SubscriptionItem 上
+  const rawPeriodStart =
+    firstItem?.current_period_start ??
+    (subscription as any).current_period_start;
+  const rawPeriodEnd =
+    firstItem?.current_period_end ?? (subscription as any).current_period_end;
+
+  const startDate = unixSecondsToDate(rawPeriodStart);
+  const endDate = unixSecondsToDate(rawPeriodEnd);
+  const priceId: string | null = firstItem?.price?.id ?? null;
+
+  return { rawPeriodStart, rawPeriodEnd, startDate, endDate, priceId };
+}
+
 export async function POST(request: NextRequest) {
   if (!webhookSecret) {
     console.error("STRIPE_WEBHOOK_SECRET is not set");
@@ -283,8 +315,7 @@ async function handleCheckoutSessionCompleted(
     // 订阅支付 - 处理会员订阅
     const subscriptionId = session.subscription as string;
     const stripeCustomerId = session.customer as string;
-    const priceId =
-      session.metadata?.priceId || "price_1SjBwxQEUxc7vavPBx2mdMp6";
+    let priceId = session.metadata?.priceId || "price_1SjBwxQEUxc7vavPBx2mdMp6";
 
     if (!subscriptionId) {
       console.error("No subscription id in checkout session", session.id);
@@ -295,37 +326,30 @@ async function handleCheckoutSessionCompleted(
       return;
     }
 
-    // 获取订阅详情以获取周期信息
+    // 获取订阅详情以获取周期信息（周期字段优先从 subscription.items.data[0] 读取）
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
 
-    // 验证并转换周期时间，防止无效日期导致 toISOString 报错
-    const rawPeriodStart = (subscription as any).current_period_start;
-    const rawPeriodEnd = (subscription as any).current_period_end;
+    if (periodInfo.priceId) priceId = periodInfo.priceId;
 
-    if (!rawPeriodStart || typeof rawPeriodStart !== "number") {
+    if (!periodInfo.startDate) {
       console.error(
         "Invalid current_period_start in subscription",
         subscriptionId,
-        rawPeriodStart
+        periodInfo.rawPeriodStart
       );
     }
-    if (!rawPeriodEnd || typeof rawPeriodEnd !== "number") {
+    if (!periodInfo.endDate) {
       console.error(
         "Invalid current_period_end in subscription",
         subscriptionId,
-        rawPeriodEnd
+        periodInfo.rawPeriodEnd
       );
     }
 
-    // 使用有效的时间戳，如果无效则回退到当前时间
-    const periodStart =
-      rawPeriodStart && typeof rawPeriodStart === "number"
-        ? new Date(rawPeriodStart * 1000)
-        : new Date();
+    const periodStart = periodInfo.startDate ?? new Date();
     const periodEnd =
-      rawPeriodEnd && typeof rawPeriodEnd === "number"
-        ? new Date(rawPeriodEnd * 1000)
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 默认30天后
+      periodInfo.endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     // 创建或更新会员记录
     let membership = await db.query.userMemberships.findFirst({
@@ -376,9 +400,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     status = "pending";
   }
 
-  // 验证周期时间有效性
-  const rawPeriodStart = (subscription as any).current_period_start;
-  const rawPeriodEnd = (subscription as any).current_period_end;
+  // 验证周期时间有效性（优先从 subscription.items.data[0] 读取；缺失则 retrieve 补全）
+  let periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
+  if (!periodInfo.startDate || !periodInfo.endDate) {
+    try {
+      const full = await stripe.subscriptions.retrieve(subscription.id);
+      periodInfo = getSubscriptionPeriodFromFirstItem(full);
+    } catch (err) {
+      console.error("Failed to retrieve subscription", subscription.id, err);
+    }
+  }
+
+  const rawPeriodStart = periodInfo.rawPeriodStart;
+  const rawPeriodEnd = periodInfo.rawPeriodEnd;
   const updateData: Partial<typeof userMemberships.$inferInsert> = {
     status,
     cancelAt: subscription.cancel_at
@@ -390,12 +424,9 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     updatedAt: new Date(),
   };
 
-  if (rawPeriodStart && typeof rawPeriodStart === "number") {
-    updateData.currentPeriodStart = new Date(rawPeriodStart * 1000);
-  }
-  if (rawPeriodEnd && typeof rawPeriodEnd === "number") {
-    updateData.currentPeriodEnd = new Date(rawPeriodEnd * 1000);
-  }
+  if (periodInfo.startDate)
+    updateData.currentPeriodStart = periodInfo.startDate;
+  if (periodInfo.endDate) updateData.currentPeriodEnd = periodInfo.endDate;
 
   await db
     .update(userMemberships)
@@ -439,20 +470,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     if (membership) {
       // 获取当前订阅周期开始时间
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const rawPeriodStart = (subscription as any).current_period_start;
-      const rawPeriodEnd = (subscription as any).current_period_end;
-
-      // 验证时间有效性
-      if (!rawPeriodStart || typeof rawPeriodStart !== "number") {
+      let periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
+      if (!periodInfo.startDate) {
         console.error(
           "Invalid current_period_start in subscription",
           subscriptionId,
-          rawPeriodStart
+          periodInfo.rawPeriodStart
         );
         return; // 跳过此次处理
       }
 
-      const periodStart = new Date(rawPeriodStart * 1000);
+      const periodStart = periodInfo.startDate;
 
       // 更新会员周期信息
       const updateData: Partial<typeof userMemberships.$inferInsert> = {
@@ -460,9 +488,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         updatedAt: new Date(),
       };
 
-      if (rawPeriodEnd && typeof rawPeriodEnd === "number") {
-        updateData.currentPeriodEnd = new Date(rawPeriodEnd * 1000);
-      }
+      if (periodInfo.endDate) updateData.currentPeriodEnd = periodInfo.endDate;
 
       await db
         .update(userMemberships)

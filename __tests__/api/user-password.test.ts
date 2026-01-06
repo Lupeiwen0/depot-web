@@ -16,11 +16,6 @@ jest.mock("@/lib/auth", () => ({
   },
 }));
 
-// Mock next/headers
-jest.mock("next/headers", () => ({
-  headers: jest.fn(() => new Headers()),
-}));
-
 // Mock db
 jest.mock("@/db", () => ({
   db: {
@@ -84,13 +79,16 @@ describe("Change Password API", () => {
   it("should return 401 if not logged in", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({
-        currentPassword: "old123",
-        newPassword: "new123",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "old123",
+          newPassword: "new123",
+        }),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -104,10 +102,13 @@ describe("Change Password API", () => {
       user: { id: "user-1", email: "test@example.com" },
     });
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -121,13 +122,16 @@ describe("Change Password API", () => {
       user: { id: "user-1", email: "test@example.com" },
     });
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({
-        currentPassword: "old123",
-        newPassword: "12345",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "old123",
+          newPassword: "12345",
+        }),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -142,13 +146,16 @@ describe("Change Password API", () => {
     });
     mockAccountFindFirst.mockResolvedValue(null);
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({
-        currentPassword: "old123",
-        newPassword: "new123456",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "old123",
+          newPassword: "new123456",
+        }),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -168,13 +175,16 @@ describe("Change Password API", () => {
     });
     mockVerifyPassword.mockResolvedValue(false);
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({
-        currentPassword: "wrong123",
-        newPassword: "new123456",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "wrong123",
+          newPassword: "new123456",
+        }),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -194,13 +204,16 @@ describe("Change Password API", () => {
     });
     mockVerifyPassword.mockResolvedValue(true);
 
-    const request = new NextRequest("http://localhost:3000/api/user/change-password", {
-      method: "POST",
-      body: JSON.stringify({
-        currentPassword: "old123",
-        newPassword: "new123456",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/change-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: "old123",
+          newPassword: "new123456",
+        }),
+      }
+    );
 
     const response = await changePassword(request);
     const data = await response.json();
@@ -217,10 +230,13 @@ describe("Request Password Reset API", () => {
   });
 
   it("should return 400 if email is missing", async () => {
-    const request = new NextRequest("http://localhost:3000/api/user/request-password-reset", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/request-password-reset",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    );
 
     const response = await requestPasswordReset(request);
     const data = await response.json();
@@ -232,10 +248,13 @@ describe("Request Password Reset API", () => {
   it("should return success even if user not found (security)", async () => {
     mockUserFindFirst.mockResolvedValue(null);
 
-    const request = new NextRequest("http://localhost:3000/api/user/request-password-reset", {
-      method: "POST",
-      body: JSON.stringify({ email: "nonexistent@example.com" }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/request-password-reset",
+      {
+        method: "POST",
+        body: JSON.stringify({ email: "nonexistent@example.com" }),
+      }
+    );
 
     const response = await requestPasswordReset(request);
     const data = await response.json();
@@ -251,17 +270,23 @@ describe("Request Password Reset API", () => {
       email: "test@example.com",
     });
 
-    const request = new NextRequest("http://localhost:3000/api/user/request-password-reset", {
-      method: "POST",
-      body: JSON.stringify({ email: "test@example.com" }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/request-password-reset",
+      {
+        method: "POST",
+        body: JSON.stringify({ email: "test@example.com" }),
+      }
+    );
 
     const response = await requestPasswordReset(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(sendPasswordResetEmail).toHaveBeenCalledWith("test@example.com", "mock-nanoid-token");
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith(
+      "test@example.com",
+      "mock-nanoid-token"
+    );
   });
 });
 
@@ -271,10 +296,13 @@ describe("Reset Password API", () => {
   });
 
   it("should return 400 if token or password is missing", async () => {
-    const request = new NextRequest("http://localhost:3000/api/user/reset-password", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      }
+    );
 
     const response = await resetPassword(request);
     const data = await response.json();
@@ -284,13 +312,16 @@ describe("Reset Password API", () => {
   });
 
   it("should return 400 if new password is too short", async () => {
-    const request = new NextRequest("http://localhost:3000/api/user/reset-password", {
-      method: "POST",
-      body: JSON.stringify({
-        token: "valid-token",
-        newPassword: "12345",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          token: "valid-token",
+          newPassword: "12345",
+        }),
+      }
+    );
 
     const response = await resetPassword(request);
     const data = await response.json();
@@ -302,13 +333,16 @@ describe("Reset Password API", () => {
   it("should return 400 if token is invalid or expired", async () => {
     mockVerificationFindFirst.mockResolvedValue(null);
 
-    const request = new NextRequest("http://localhost:3000/api/user/reset-password", {
-      method: "POST",
-      body: JSON.stringify({
-        token: "invalid-token",
-        newPassword: "new123456",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          token: "invalid-token",
+          newPassword: "new123456",
+        }),
+      }
+    );
 
     const response = await resetPassword(request);
     const data = await response.json();
@@ -325,13 +359,16 @@ describe("Reset Password API", () => {
       expiresAt: new Date(Date.now() + 3600000),
     });
 
-    const request = new NextRequest("http://localhost:3000/api/user/reset-password", {
-      method: "POST",
-      body: JSON.stringify({
-        token: "valid-token",
-        newPassword: "new123456",
-      }),
-    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/user/reset-password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          token: "valid-token",
+          newPassword: "new123456",
+        }),
+      }
+    );
 
     const response = await resetPassword(request);
     const data = await response.json();
