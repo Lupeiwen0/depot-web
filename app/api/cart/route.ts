@@ -4,16 +4,22 @@ import { db } from "@/db";
 import { carts, lineItems, products } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { ErrorCodes } from "@/lib/errors";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 // GET - 获取用户购物车详情
 export async function GET() {
+  const { t } = await getServerTranslations();
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) },
+        { status: 401 }
+      );
     }
 
     const userCart = await db.query.carts.findFirst({
@@ -59,26 +65,36 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Get cart error:", error);
-    return NextResponse.json({ error: "获取购物车失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.CART_ADD_FAILED) },
+      { status: 500 }
+    );
   }
 }
 
 // POST - 添加商品到购物车
 export async function POST(request: NextRequest) {
+  const { t } = await getServerTranslations();
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
     const { productId, quantity = 1 } = body;
 
     if (!productId || typeof productId !== "number") {
-      return NextResponse.json({ error: "无效的商品 ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.VALIDATION_INVALID_ID) },
+        { status: 400 }
+      );
     }
 
     // 检查商品是否存在
@@ -88,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     if (!product || !product.isActive) {
       return NextResponse.json(
-        { error: "商品不存在或已下架" },
+        { error: t(ErrorCodes.PRODUCT_NOT_FOUND) },
         { status: 404 }
       );
     }
@@ -138,6 +154,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Add to cart error:", error);
-    return NextResponse.json({ error: "添加购物车失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.CART_ADD_FAILED) },
+      { status: 500 }
+    );
   }
 }

@@ -5,6 +5,8 @@ import { products } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { z } from "zod";
+import { ErrorCodes } from "@/lib/errors";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -19,13 +21,17 @@ const productSchema = z.object({
 });
 
 // 验证管理员权限
-async function checkAdmin() {
+async function checkAdmin(t: (key: string) => string) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
   if (!session?.user) {
-    return { isAdmin: false, error: "未登录", status: 401 };
+    return {
+      isAdmin: false,
+      error: t(ErrorCodes.AUTH_NOT_LOGGED_IN),
+      status: 401,
+    };
   }
 
   const userRecord = await db.query.user.findFirst({
@@ -33,7 +39,11 @@ async function checkAdmin() {
   });
 
   if (userRecord?.role !== "admin") {
-    return { isAdmin: false, error: "没有管理员权限", status: 403 };
+    return {
+      isAdmin: false,
+      error: t(ErrorCodes.AUTH_ADMIN_REQUIRED),
+      status: 403,
+    };
   }
 
   return { isAdmin: true, userId: session.user.id };
@@ -41,8 +51,9 @@ async function checkAdmin() {
 
 // PUT - 更新商品
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { t } = await getServerTranslations();
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return NextResponse.json(
         { error: adminCheck.error },
@@ -54,7 +65,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const id = parseInt(idStr);
 
     if (isNaN(id)) {
-      return NextResponse.json({ error: "无效的商品 ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.VALIDATION_INVALID_ID) },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();
@@ -65,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const errors = validated.error.flatten();
       return NextResponse.json(
         {
-          error: "表单验证失败",
+          error: t(ErrorCodes.VALIDATION_INVALID_REQUEST),
           fieldErrors: errors.fieldErrors,
         },
         { status: 400 }
@@ -80,7 +94,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!existingProduct) {
-      return NextResponse.json({ error: "商品不存在" }, { status: 404 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.PRODUCT_NOT_FOUND) },
+        { status: 404 }
+      );
     }
 
     await db
@@ -98,14 +115,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Update product error:", error);
-    return NextResponse.json({ error: "更新商品失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.PRODUCT_UPDATE_FAILED) },
+      { status: 500 }
+    );
   }
 }
 
 // PATCH - 切换商品上下架状态
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const { t } = await getServerTranslations();
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return NextResponse.json(
         { error: adminCheck.error },
@@ -117,7 +138,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const id = parseInt(idStr);
 
     if (isNaN(id)) {
-      return NextResponse.json({ error: "无效的商品 ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.VALIDATION_INVALID_ID) },
+        { status: 400 }
+      );
     }
 
     // 查询当前状态
@@ -126,7 +150,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     });
 
     if (!product) {
-      return NextResponse.json({ error: "商品不存在" }, { status: 404 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.PRODUCT_NOT_FOUND) },
+        { status: 404 }
+      );
     }
 
     // 切换状态
@@ -141,14 +168,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ success: true, isActive: !product.isActive });
   } catch (error) {
     console.error("Toggle product status error:", error);
-    return NextResponse.json({ error: "切换商品状态失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.PRODUCT_TOGGLE_STATUS_FAILED) },
+      { status: 500 }
+    );
   }
 }
 
 // DELETE - 删除商品
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const { t } = await getServerTranslations();
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return NextResponse.json(
         { error: adminCheck.error },
@@ -160,7 +191,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const id = parseInt(idStr);
 
     if (isNaN(id)) {
-      return NextResponse.json({ error: "无效的商品 ID" }, { status: 400 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.VALIDATION_INVALID_ID) },
+        { status: 400 }
+      );
     }
 
     await db.delete(products).where(eq(products.id, id));
@@ -173,10 +207,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       error.message?.includes("violates foreign key constraint")
     ) {
       return NextResponse.json(
-        { error: "商品已被加入购物车，无法删除" },
+        { error: t(ErrorCodes.PRODUCT_IN_CART_CANNOT_DELETE) },
         { status: 400 }
       );
     }
-    return NextResponse.json({ error: "删除商品失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.PRODUCT_DELETE_FAILED) },
+      { status: 500 }
+    );
   }
 }

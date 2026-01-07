@@ -5,6 +5,8 @@ import { orders, lineItems, carts } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { z } from "zod";
+import { ErrorCodes } from "@/lib/errors";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 const orderSchema = z.object({
   name: z.string().min(1, "请输入姓名"),
@@ -17,13 +19,17 @@ const orderSchema = z.object({
 
 // POST - 创建订单
 export async function POST(request: NextRequest) {
+  const { t } = await getServerTranslations();
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
@@ -34,7 +40,7 @@ export async function POST(request: NextRequest) {
       const errors = validated.error.flatten();
       return NextResponse.json(
         {
-          error: "表单验证失败",
+          error: t(ErrorCodes.VALIDATION_INVALID_REQUEST),
           fieldErrors: errors.fieldErrors,
         },
         { status: 400 }
@@ -54,7 +60,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!cart || cart.lineItems.length === 0) {
-      return NextResponse.json({ error: "购物车为空" }, { status: 400 });
+      return NextResponse.json(
+        { error: t(ErrorCodes.ORDER_CART_EMPTY) },
+        { status: 400 }
+      );
     }
 
     // 创建订单
@@ -82,6 +91,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, orderId: order.id });
   } catch (error) {
     console.error("Create order error:", error);
-    return NextResponse.json({ error: "创建订单失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.ORDER_CREATE_FAILED) },
+      { status: 500 }
+    );
   }
 }

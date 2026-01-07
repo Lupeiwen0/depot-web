@@ -4,6 +4,8 @@ import { products } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { z } from "zod";
+import { ErrorCodes } from "@/lib/errors";
+import { getServerTranslations } from "@/lib/server-i18n";
 
 const productSchema = z.object({
   title: z.string().min(1, "请输入商品名称"),
@@ -14,13 +16,17 @@ const productSchema = z.object({
 });
 
 // 验证管理员权限
-async function checkAdmin() {
+async function checkAdmin(t: (key: string) => string) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
   if (!session?.user) {
-    return { isAdmin: false, error: "未登录", status: 401 };
+    return {
+      isAdmin: false,
+      error: t(ErrorCodes.AUTH_NOT_LOGGED_IN),
+      status: 401,
+    };
   }
 
   const userRecord = await db.query.user.findFirst({
@@ -28,7 +34,11 @@ async function checkAdmin() {
   });
 
   if (userRecord?.role !== "admin") {
-    return { isAdmin: false, error: "没有管理员权限", status: 403 };
+    return {
+      isAdmin: false,
+      error: t(ErrorCodes.AUTH_ADMIN_REQUIRED),
+      status: 403,
+    };
   }
 
   return { isAdmin: true, userId: session.user.id };
@@ -36,8 +46,9 @@ async function checkAdmin() {
 
 // POST - 创建商品
 export async function POST(request: NextRequest) {
+  const { t } = await getServerTranslations();
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return NextResponse.json(
         { error: adminCheck.error },
@@ -53,7 +64,7 @@ export async function POST(request: NextRequest) {
       const errors = validated.error.flatten();
       return NextResponse.json(
         {
-          error: "表单验证失败",
+          error: t(ErrorCodes.VALIDATION_INVALID_REQUEST),
           fieldErrors: errors.fieldErrors,
         },
         { status: 400 }
@@ -76,6 +87,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, product: newProduct });
   } catch (error) {
     console.error("Create product error:", error);
-    return NextResponse.json({ error: "创建商品失败" }, { status: 500 });
+    return NextResponse.json(
+      { error: t(ErrorCodes.PRODUCT_CREATE_FAILED) },
+      { status: 500 }
+    );
   }
 }
