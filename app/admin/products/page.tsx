@@ -6,39 +6,45 @@ import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
-interface Product {
-  id: number;
-  title: string;
-  description: string | null;
-  imageUrl: string | null;
-  price: string;
-  productType: string;
-  stripeProductId: string | null;
-  stripePriceId: string | null;
-  stripePaymentLinkUrl: string | null;
-  isActive: boolean;
-  tags: string[] | null;
-  salesCount: number;
-  averageRating: string;
-  reviewCount: number;
-  createdAt: string;
-  updatedAt: string;
+// 获取所有标签（用于筛选器）
+async function getAllTags(cookie: string): Promise<string[]> {
+  try {
+    const res = await fetchInternalApiWithAuth(
+      "/api/admin/products?pageSize=100",
+      cookie
+    );
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const products = data.products || [];
+    const tagSet = new Set<string>();
+
+    products.forEach((p: { tags?: string[] | null }) => {
+      if (p.tags && Array.isArray(p.tags)) {
+        p.tags.forEach((tag) => tagSet.add(tag));
+      }
+    });
+
+    return Array.from(tagSet).sort();
+  } catch {
+    return [];
+  }
 }
 
-async function getProducts(cookie: string) {
-  const res = await fetchInternalApiWithAuth("/api/admin/products?pageSize=100", cookie);
+// 验证管理员权限
+async function checkAdminAuth(cookie: string) {
+  const res = await fetchInternalApiWithAuth(
+    "/api/admin/products?pageSize=1",
+    cookie
+  );
 
   if (!res.ok) {
-    if (res.status === 401) {
-      return { unauthorized: true };
-    }
-    if (res.status === 403) {
-      return { forbidden: true };
-    }
+    if (res.status === 401) return { unauthorized: true };
+    if (res.status === 403) return { forbidden: true };
     return { error: true };
   }
 
-  return await res.json();
+  return { success: true };
 }
 
 export default async function AdminProductsPage() {
@@ -46,17 +52,17 @@ export default async function AdminProductsPage() {
   const cookie = headersList.get("cookie") || "";
   const t = await getTranslations("admin");
 
-  const data = await getProducts(cookie);
+  const authCheck = await checkAdminAuth(cookie);
 
-  if (data.unauthorized) {
+  if (authCheck.unauthorized) {
     redirect("/login");
   }
 
-  if (data.forbidden) {
+  if (authCheck.forbidden) {
     redirect("/");
   }
 
-  if (data.error) {
+  if (authCheck.error) {
     return (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen bg-muted/5">
         <div className="text-center py-10">
@@ -66,11 +72,12 @@ export default async function AdminProductsPage() {
     );
   }
 
-  const allProducts: Product[] = data.products || [];
+  // 获取所有标签供筛选器使用
+  const allTags = await getAllTags(cookie);
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-screen bg-muted/5">
-      <ProductsContainer products={allProducts} />
+      <ProductsContainer allTags={allTags} />
     </main>
   );
 }

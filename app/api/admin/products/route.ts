@@ -20,11 +20,14 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = Math.min(
-      parseInt(searchParams.get("pageSize") || "50"),
+      parseInt(searchParams.get("pageSize") || "20"),
       100
     );
     const sortBy = searchParams.get("sortBy") || "createdAt";
     const sortOrder = searchParams.get("sortOrder") || "desc";
+    const minPrice = searchParams.get("minPrice");
+    const maxPrice = searchParams.get("maxPrice");
+    const tag = searchParams.get("tag");
 
     // 构建查询条件
     const conditions = [];
@@ -37,6 +40,25 @@ export async function GET(request: NextRequest) {
           ilike(products.description, `%${search}%`)
         )
       );
+    }
+
+    // 价格区间筛选
+    if (minPrice) {
+      const min = parseFloat(minPrice);
+      if (!isNaN(min)) {
+        conditions.push(sql`CAST(${products.price} AS DECIMAL) >= ${min}`);
+      }
+    }
+    if (maxPrice) {
+      const max = parseFloat(maxPrice);
+      if (!isNaN(max)) {
+        conditions.push(sql`CAST(${products.price} AS DECIMAL) <= ${max}`);
+      }
+    }
+
+    // 标签筛选
+    if (tag) {
+      conditions.push(sql`${products.tags} @> ARRAY[${tag}]::text[]`);
     }
 
     // 排序

@@ -19,7 +19,13 @@ type Product = {
   updatedAt: Date | string;
 };
 
-export default function ProductList({ products }: { products: Product[] }) {
+export default function ProductList({
+  products,
+  onRefresh,
+}: {
+  products: Product[];
+  onRefresh?: () => void;
+}) {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -29,6 +35,8 @@ export default function ProductList({ products }: { products: Product[] }) {
     const result = await toggleProductStatus(id);
     if (!result.success) {
       alert(result.error || "操作失败");
+    } else {
+      onRefresh?.();
     }
     setToggling(null);
   };
@@ -42,8 +50,10 @@ export default function ProductList({ products }: { products: Product[] }) {
     const result = await deleteProduct(id);
     if (!result.success) {
       alert(result.error || "删除失败");
-      setDeleting(null);
+    } else {
+      onRefresh?.();
     }
+    setDeleting(null);
   };
 
   return (
@@ -195,6 +205,7 @@ export default function ProductList({ products }: { products: Product[] }) {
           product={editingProduct}
           open={!!editingProduct}
           onOpenChange={(open) => !open && setEditingProduct(null)}
+          onSuccess={onRefresh}
         />
       )}
     </>

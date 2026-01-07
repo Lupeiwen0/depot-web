@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -9,8 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import ProductList from "./ProductList";
 import ProductFormDialog from "./ProductFormDialog";
+import { useTranslations } from "next-intl";
+import { cn } from "@/lib/utils";
 
 type Product = {
   id: number;
@@ -23,116 +27,346 @@ type Product = {
   updatedAt: Date | string;
 };
 
-type SortOption = "createdAt-desc" | "createdAt-asc" | "price-desc" | "price-asc" | "title-asc" | "title-desc";
+type SortOption =
+  | "createdAt-desc"
+  | "createdAt-asc"
+  | "price-desc"
+  | "price-asc"
+  | "title-asc"
+  | "title-desc";
 
-const sortOptions: { value: SortOption; label: string }[] = [
-  { value: "createdAt-desc", label: "最新创建" },
-  { value: "createdAt-asc", label: "最早创建" },
-  { value: "price-desc", label: "价格从高到低" },
-  { value: "price-asc", label: "价格从低到高" },
-  { value: "title-asc", label: "名称 A-Z" },
-  { value: "title-desc", label: "名称 Z-A" },
-];
+interface PaginationInfo {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
 
 export default function ProductsContainer({
-  products,
+  initialProducts,
+  initialPagination,
+  allTags,
 }: {
-  products: Product[];
+  initialProducts?: Product[];
+  initialPagination?: PaginationInfo;
+  allTags?: string[];
 }) {
+  const t = useTranslations("admin.products");
+  const tPagination = useTranslations("pagination");
+
+  // 状态
+  const [products, setProducts] = useState<Product[]>(initialProducts || []);
+  const [pagination, setPagination] = useState<PaginationInfo>(
+    initialPagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 }
+  );
+  const [isLoading, setIsLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>("createdAt-desc");
+
+  // 筛选条件
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("createdAt-desc");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // 获取所有唯一的标签
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    products.forEach((product) => {
-      if (product.tags && Array.isArray(product.tags)) {
-        product.tags.forEach((tag) => tagSet.add(tag));
-      }
-    });
-    return Array.from(tagSet).sort();
-  }, [products]);
+  // 排序选项
+  const sortOptions: { value: SortOption; label: string }[] = [
+    { value: "createdAt-desc", label: t("sort.newestFirst") },
+    { value: "createdAt-asc", label: t("sort.oldestFirst") },
+    { value: "price-desc", label: t("sort.priceHighToLow") },
+    { value: "price-asc", label: t("sort.priceLowToHigh") },
+    { value: "title-asc", label: t("sort.nameAZ") },
+    { value: "title-desc", label: t("sort.nameZA") },
+  ];
 
-  // 筛选和排序商品
-  const filteredAndSortedProducts = useMemo(() => {
-    let result = [...products];
+  // 获取商品数据
+  const fetchProducts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [sortField, sortOrder] = sortBy.split("-");
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        pageSize: "20",
+        sortBy: sortField,
+        sortOrder: sortOrder,
+      });
 
-    // 按标签筛选
-    if (selectedTag !== "all") {
-      result = result.filter(
-        (product) => product.tags && product.tags.includes(selectedTag)
+      if (search) params.set("search", search);
+      if (minPrice) params.set("minPrice", minPrice);
+      if (maxPrice) params.set("maxPrice", maxPrice);
+      if (selectedTag && selectedTag !== "all") params.set("tag", selectedTag);
+
+      const res = await fetch(`/api/admin/products?${params.toString()}`);
+      if (!res.ok) throw new Error("获取商品失败");
+
+      const data = await res.json();
+      setProducts(data.products || []);
+      setPagination(
+        data.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 }
       );
+    } catch (error) {
+      console.error("Fetch products error:", error);
+    } finally {
+      setIsLoading(false);
     }
+  }, [currentPage, search, minPrice, maxPrice, selectedTag, sortBy]);
 
-    // 排序
-    const [field, order] = sortBy.split("-") as [string, "asc" | "desc"];
-    result.sort((a, b) => {
-      let comparison = 0;
-      if (field === "createdAt") {
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      } else if (field === "price") {
-        comparison = parseFloat(a.price) - parseFloat(b.price);
-      } else if (field === "title") {
-        comparison = a.title.localeCompare(b.title, "zh-CN");
+  // 筛选条件变化时重新获取
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput);
+        setCurrentPage(1);
       }
-      return order === "desc" ? -comparison : comparison;
-    });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
 
-    return result;
-  }, [products, selectedTag, sortBy]);
+  // 处理筛选条件变化
+  const handleTagChange = (value: string) => {
+    setSelectedTag(value);
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (value: SortOption) => {
+    setSortBy(value);
+    setCurrentPage(1);
+  };
+
+  const handlePriceChange = (type: "min" | "max", value: string) => {
+    if (type === "min") {
+      setMinPrice(value);
+    } else {
+      setMaxPrice(value);
+    }
+    setCurrentPage(1);
+  };
+
+  // 分页器渲染
+  const renderPagination = () => {
+    if (pagination.totalPages <= 1) return null;
+
+    const getPageNumbers = () => {
+      const pages: (number | "...")[] = [];
+      const maxVisible = 5;
+
+      if (pagination.totalPages <= maxVisible) {
+        for (let i = 1; i <= pagination.totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (currentPage <= 3) {
+          pages.push(1, 2, 3, 4, "...", pagination.totalPages);
+        } else if (currentPage >= pagination.totalPages - 2) {
+          pages.push(
+            1,
+            "...",
+            pagination.totalPages - 3,
+            pagination.totalPages - 2,
+            pagination.totalPages - 1,
+            pagination.totalPages
+          );
+        } else {
+          pages.push(
+            1,
+            "...",
+            currentPage - 1,
+            currentPage,
+            currentPage + 1,
+            "...",
+            pagination.totalPages
+          );
+        }
+      }
+
+      return pages;
+    };
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
+        <p className="text-sm text-muted-foreground">
+          {tPagination("info", {
+            total: pagination.total,
+            page: currentPage,
+            totalPages: pagination.totalPages,
+          })}
+        </p>
+
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage <= 1 || isLoading}
+            className="h-9 px-3 rounded-lg"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1">{tPagination("prev")}</span>
+          </Button>
+
+          <div className="flex items-center gap-1 mx-2">
+            {getPageNumbers().map((pageNum, index) =>
+              pageNum === "..." ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-muted-foreground"
+                >
+                  ...
+                </span>
+              ) : (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(pageNum)}
+                  disabled={isLoading}
+                  className={cn(
+                    "h-9 w-9 p-0 rounded-lg",
+                    currentPage === pageNum
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted"
+                  )}
+                >
+                  {pageNum}
+                </Button>
+              )
+            )}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage >= pagination.totalPages || isLoading}
+            className="h-9 px-3 rounded-lg"
+          >
+            <span className="hidden sm:inline mr-1">{tPagination("next")}</span>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold tracking-tight">商品管理</h1>
-        <Button onClick={() => setShowCreateDialog(true)}>添加商品</Button>
+      {/* 标题 */}
+      <div className="flex justify-between items-center mb-6 animate-fade-in">
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
       </div>
 
-      {/* 筛选和排序 */}
-      <div className="flex gap-4 mb-6 animate-fade-in">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">排序:</span>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sortOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* 筛选区 - 吸顶 */}
+      <div className="sticky top-[68px] z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 mb-6 border rounded-xl shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 px-4">
+          {/* 关键字搜索 */}
+          <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜索商品名称..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+
+          {/* 价格区间 */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              价格:
+            </span>
+            <Input
+              type="number"
+              placeholder="最低"
+              value={minPrice}
+              onChange={(e) => handlePriceChange("min", e.target.value)}
+              className="w-20 h-9"
+            />
+            <span className="text-muted-foreground">-</span>
+            <Input
+              type="number"
+              placeholder="最高"
+              value={maxPrice}
+              onChange={(e) => handlePriceChange("max", e.target.value)}
+              className="w-20 h-9"
+            />
+          </div>
+
+          {/* 标签筛选 */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {t("filterByTag")}:
+            </span>
+            <Select value={selectedTag} onValueChange={handleTagChange}>
+              <SelectTrigger className="w-[120px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                {allTags?.map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 排序 */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {t("sort.label")}:
+            </span>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => handleSortChange(v as SortOption)}
+            >
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 添加商品按钮 - 靠右 */}
+          <div className="flex-1 flex justify-end">
+            <Button onClick={() => setShowCreateDialog(true)}>
+              {t("addProduct")}
+            </Button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">标签:</span>
-          <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {allTags.map((tag) => (
-                <SelectItem key={tag} value={tag}>
-                  {tag}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      <div className="animate-slide-up">
-        <ProductList products={filteredAndSortedProducts} />
+      {/* 商品列表 */}
+      <div className="animate-slide-up relative min-h-[170px] overflow-hidden rounded-lg">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10 rounded-lg">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+        <ProductList products={products} onRefresh={fetchProducts} />
       </div>
+
+      {/* 分页 */}
+      {renderPagination()}
 
       {/* 新建商品弹窗 */}
       <ProductFormDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
+        onSuccess={fetchProducts}
       />
     </>
   );

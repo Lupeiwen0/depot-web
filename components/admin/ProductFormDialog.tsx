@@ -29,10 +29,12 @@ export default function ProductFormDialog({
   product,
   open,
   onOpenChange,
+  onSuccess,
 }: {
   product?: Product;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,6 +65,7 @@ export default function ProductFormDialog({
 
     if (result.success) {
       onOpenChange(false);
+      onSuccess?.();
       // Server Action 已调用 revalidatePath，页面会自动更新
     } else {
       setError(result.error || "操作失败");
