@@ -5,6 +5,7 @@ import { carts, lineItems } from "@/db/depot-schema";
 import { eq } from "drizzle-orm";
 import HeaderClient from "./HeaderClient";
 import CartDrawer, { type CartItem } from "./CartDrawer";
+import { StoreProvider } from "./StoreProvider";
 
 export default async function Header() {
   const session = await auth.api.getSession({
@@ -44,13 +45,13 @@ export default async function Header() {
   }
 
   return (
-    <>
+    <StoreProvider isLoggedIn={!!session?.user}>
       <HeaderClient
         session={session}
         userRole={userRole}
         cartItemCount={cartItemCount}
       />
       <CartDrawer initialItems={cartItems} />
-    </>
+    </StoreProvider>
   );
 }

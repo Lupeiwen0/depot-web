@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  carts,
-  orders,
-  lineItems,
-  products,
-  payments,
-  userStripeCustomers,
-} from "@/db/schema";
+import { orders, lineItems, payments, userStripeCustomers } from "@/db/schema";
 import { stripe, STRIPE_CONFIG } from "@/lib/stripe";
 import { toStripeAmount, calculateItemTotal } from "@/lib/currency";
 import { auth } from "@/lib/auth";
@@ -20,12 +13,11 @@ import { validateCoupon, calculateDiscountedTotal } from "@/lib/coupon-service";
 interface CreateSessionRequest {
   type?: "one_time" | "subscription";
   paymentType?: "one_time" | "subscription"; // 兼容前端
-  cartId?: number;
-  orderId?: number; // 支持基于订单的支付
+  orderId?: number; // 支付基于订单
   priceId?: string;
   successUrl?: string;
   cancelUrl?: string;
-  couponId?: number; // 改为优惠券ID
+  couponId?: number; // 优惠券ID
 }
 
 export async function POST(request: NextRequest) {
@@ -39,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateSessionRequest = await request.json();
-    const { cartId, orderId, priceId, couponId } = body;
+    const { orderId, priceId, couponId } = body;
     // 兼容 type 和 paymentType 两种参数名
     const type = body.type || body.paymentType || "one_time";
     // 默认的成功和取消 URL
@@ -82,128 +74,84 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === "one_time") {
-      // 一次性支付（购物车结算或订单支付）
-      let orderLineItems: Array<{
-        product: {
-          title: string;
-          description: string | null;
-          imageUrl: string | null;
-          price: string;
-        };
-        quantity: number;
-      }> = [];
-      let metadataId: string;
-      let metadataType: "cartId" | "orderId";
+      // 一次性支付（基于订单）
+      if (!orderId) {
+        return NextResponse.json(
+          { error: "orderId is required for one_time payment" },
+          { status: 400 }
+        );
+      }
 
-      if (orderId) {
-        // 基于订单的支付
-        const order = await db.query.orders.findFirst({
-          where: eq(orders.id, orderId),
-          with: {
-            lineItems: {
-              with: {
-                product: true,
-              },
+      // 基于订单的支付
+      const order = await db.query.orders.findFirst({
+        where: eq(orders.id, orderId),
+        with: {
+          lineItems: {
+            with: {
+              product: true,
             },
-            payments: true,
           },
-        });
+          payments: true,
+        },
+      });
 
-        if (!order || order.userId !== session.user.id) {
-          return NextResponse.json(
-            { error: "Order not found or unauthorized" },
-            { status: 404 }
-          );
-        }
-
-        if (order.lineItems.length === 0) {
-          return NextResponse.json(
-            { error: "Order is empty" },
-            { status: 400 }
-          );
-        }
-
-        // 检查订单是否已有成功支付
-        const successfulPayment = order.payments?.find(
-          (p) => p.status === "succeeded"
+      if (!order || order.userId !== session.user.id) {
+        return NextResponse.json(
+          { error: "Order not found or unauthorized" },
+          { status: 404 }
         );
-        if (successfulPayment) {
-          return NextResponse.json(
-            { error: "Order has already been paid" },
-            { status: 400 }
-          );
-        }
+      }
 
-        // 检查是否有 pending 的支付记录，复用同一个 Stripe Session
-        const pendingPayment = order.payments?.find(
-          (p) => p.status === "pending" && p.stripeCheckoutSessionId
+      if (order.lineItems.length === 0) {
+        return NextResponse.json({ error: "Order is empty" }, { status: 400 });
+      }
+
+      // 检查订单是否已有成功支付
+      const successfulPayment = order.payments?.find(
+        (p) => p.status === "succeeded"
+      );
+      if (successfulPayment) {
+        return NextResponse.json(
+          { error: "Order has already been paid" },
+          { status: 400 }
         );
-        if (pendingPayment?.stripeCheckoutSessionId) {
-          try {
-            // 查询 Stripe Session 状态
-            const existingSession = await stripe.checkout.sessions.retrieve(
-              pendingPayment.stripeCheckoutSessionId
-            );
-            // Session 仍然有效（open 状态），复用该链接
-            if (existingSession.status === "open" && existingSession.url) {
-              return NextResponse.json({
-                sessionId: existingSession.id,
-                url: existingSession.url,
-              });
-            }
-            // Session 已过期或已完成，将 pending 记录标记为 canceled
-            if (existingSession.status === "expired") {
-              await db
-                .update(payments)
-                .set({ status: "canceled", updatedAt: new Date() })
-                .where(eq(payments.id, pendingPayment.id));
-            }
-          } catch (e) {
-            // Session 查询失败（可能已过期），标记为 canceled
-            console.error("Failed to retrieve existing session:", e);
+      }
+
+      // 检查是否有 pending 的支付记录，复用同一个 Stripe Session
+      const pendingPayment = order.payments?.find(
+        (p) => p.status === "pending" && p.stripeCheckoutSessionId
+      );
+      if (pendingPayment?.stripeCheckoutSessionId) {
+        try {
+          // 查询 Stripe Session 状态
+          const existingSession = await stripe.checkout.sessions.retrieve(
+            pendingPayment.stripeCheckoutSessionId
+          );
+          // Session 仍然有效（open 状态），复用该链接
+          if (existingSession.status === "open" && existingSession.url) {
+            return NextResponse.json({
+              sessionId: existingSession.id,
+              url: existingSession.url,
+            });
+          }
+          // Session 已过期或已完成，将 pending 记录标记为 canceled
+          if (existingSession.status === "expired") {
             await db
               .update(payments)
               .set({ status: "canceled", updatedAt: new Date() })
               .where(eq(payments.id, pendingPayment.id));
           }
+        } catch (e) {
+          // Session 查询失败（可能已过期），标记为 canceled
+          console.error("Failed to retrieve existing session:", e);
+          await db
+            .update(payments)
+            .set({ status: "canceled", updatedAt: new Date() })
+            .where(eq(payments.id, pendingPayment.id));
         }
-
-        orderLineItems = order.lineItems;
-        metadataId = orderId.toString();
-        metadataType = "orderId";
-      } else if (cartId) {
-        // 基于购物车的支付
-        const cart = await db.query.carts.findFirst({
-          where: eq(carts.id, cartId),
-          with: {
-            lineItems: {
-              with: {
-                product: true,
-              },
-            },
-          },
-        });
-
-        if (!cart || cart.userId !== session.user.id) {
-          return NextResponse.json(
-            { error: "Cart not found or unauthorized" },
-            { status: 404 }
-          );
-        }
-
-        if (cart.lineItems.length === 0) {
-          return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
-        }
-
-        orderLineItems = cart.lineItems;
-        metadataId = cartId.toString();
-        metadataType = "cartId";
-      } else {
-        return NextResponse.json(
-          { error: "orderId or cartId is required for one_time payment" },
-          { status: 400 }
-        );
       }
+
+      const orderLineItems = order.lineItems;
 
       // 构建 Stripe line items
       const stripeLineItems = orderLineItems.map((item) => ({
@@ -274,7 +222,7 @@ export async function POST(request: NextRequest) {
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: {
-          [metadataType]: metadataId,
+          orderId: orderId.toString(),
           userId: session.user.id,
           type: "one_time",
           ...(validatedCoupon
@@ -298,7 +246,7 @@ export async function POST(request: NextRequest) {
         currency: STRIPE_CONFIG.currency,
         status: "pending",
         metadata: JSON.stringify({
-          [metadataType]: metadataId,
+          orderId: orderId,
           ...(validatedCoupon
             ? {
                 couponId: validatedCoupon.id,

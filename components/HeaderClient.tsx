@@ -3,12 +3,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signOut } from "@/lib/auth-client";
-import { ShoppingCart, Settings, LogOut, Ticket, Users, Tag, Package, KeyRound } from "lucide-react";
+import {
+  ShoppingCart,
+  Settings,
+  LogOut,
+  Ticket,
+  Users,
+  Tag,
+  Package,
+  KeyRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useCartDrawer } from "@/contexts/CartDrawerContext";
 import ChangePasswordDialog from "./ChangePasswordDialog";
+import { SubscriptionManageButton } from "./SubscriptionManageButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageToggle } from "./LanguageToggle";
 import { useTranslations } from "next-intl";
@@ -151,6 +165,10 @@ export default function HeaderClient({
                   </PopoverTrigger>
                   <PopoverContent className="w-48 p-2" align="end">
                     <div className="flex flex-col gap-1">
+                      <SubscriptionManageButton
+                        variant="ghost"
+                        className="justify-start px-3 py-2 h-auto font-normal w-full"
+                      />
                       <button
                         onClick={() => {
                           setPopoverOpen(false);

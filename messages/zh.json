@@ -60,7 +60,10 @@
     "register": "注册",
     "changePassword": "修改密码",
     "logout": "退出登录",
-    "admin": "管理员"
+    "admin": "管理员",
+    "manageSubscription": "订阅管理",
+    "joinMembership": "开通会员",
+    "processing": "处理中..."
   },
   "theme": {
     "light": "浅色模式",

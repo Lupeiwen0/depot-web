@@ -60,7 +60,10 @@
     "register": "Register",
     "changePassword": "Change Password",
     "logout": "Logout",
-    "admin": "Admin"
+    "admin": "Admin",
+    "manageSubscription": "Manage Subscription",
+    "joinMembership": "Join Membership",
+    "processing": "Processing..."
   },
   "theme": {
     "light": "Light",

@@ -4,8 +4,6 @@ import { db } from "@/db";
 import {
   payments,
   orders,
-  lineItems,
-  carts,
   userMemberships,
   userCoupons,
   stripeWebhookLogs,
@@ -54,6 +52,154 @@ function getSubscriptionPeriodFromFirstItem(
 
   return { rawPeriodStart, rawPeriodEnd, startDate, endDate, priceId };
 }
+
+// ============================================================================
+// 权益发放公共函数
+// ============================================================================
+
+/**
+ * 尝试完成单次支付的权益发放
+ * 条件：payment.status === "succeeded" && payment.orderId 存在
+ */
+async function tryFinalizeOneTimePayment(paymentId: number) {
+  const payment = await db.query.payments.findFirst({
+    where: eq(payments.id, paymentId),
+  });
+
+  if (!payment) {
+    console.log(`Payment ${paymentId} not found`);
+    return;
+  }
+
+  // 条件检查：支付成功 + 订单已关联
+  if (payment.status !== "succeeded") {
+    console.log(
+      `Payment ${paymentId} status is ${payment.status}, not succeeded`
+    );
+    return;
+  }
+
+  if (!payment.orderId) {
+    console.log(
+      `Payment ${paymentId} has no orderId, waiting for order creation`
+    );
+    return;
+  }
+
+  // 幂等性检查：通过 metadata 标记是否已发放权益
+  const metadata = payment.metadata ? JSON.parse(payment.metadata) : {};
+  if (metadata.benefitsGranted) {
+    console.log(`Payment ${paymentId} benefits already granted`);
+    return;
+  }
+
+  // 获取订单及其商品
+  const order = await db.query.orders.findFirst({
+    where: eq(orders.id, payment.orderId),
+    with: {
+      lineItems: {
+        with: {
+          product: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    console.log(`Order ${payment.orderId} not found`);
+    return;
+  }
+
+  // 发放权益：更新商品销量
+  for (const item of order.lineItems) {
+    // 检查销量是否已更新（通过一个额外的幂等性标记）
+    await db
+      .update(products)
+      .set({
+        salesCount: sql`${products.salesCount} + ${item.quantity}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, item.productId));
+  }
+
+  // 处理优惠券应用（如果有）
+  const checkoutSessionId = payment.stripeCheckoutSessionId;
+  if (checkoutSessionId) {
+    // 从 webhook log 中获取原始 session 数据
+    const log = await db.query.stripeWebhookLogs.findFirst({
+      where: and(
+        eq(stripeWebhookLogs.eventType, "checkout.session.completed"),
+        sql`${stripeWebhookLogs.payload}::jsonb->>'id' = ${checkoutSessionId}`
+      ),
+    });
+
+    if (log) {
+      try {
+        const sessionData = JSON.parse(log.payload);
+        const couponIdStr = sessionData.metadata?.couponId;
+        if (couponIdStr) {
+          const couponId = parseInt(couponIdStr);
+          if (!isNaN(couponId)) {
+            await applyCoupon(couponId, order.id);
+            console.log(`Applied coupon ${couponId} to order ${order.id}`);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse session data for coupon", e);
+      }
+    }
+  }
+
+  // 标记权益已发放
+  await db
+    .update(payments)
+    .set({
+      metadata: JSON.stringify({ ...metadata, benefitsGranted: true }),
+      updatedAt: new Date(),
+    })
+    .where(eq(payments.id, paymentId));
+
+  console.log(`Payment ${paymentId} benefits granted successfully`);
+}
+
+/**
+ * 尝试完成订阅的权益发放
+ * 条件：membership.status === "active" && membership.userId 存在 && payment 已成功
+ */
+async function tryFinalizeSubscription(
+  subscriptionId: string,
+  periodStart: Date
+) {
+  const membership = await db.query.userMemberships.findFirst({
+    where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
+  });
+
+  if (!membership) {
+    console.log(`Membership not found for subscription: ${subscriptionId}`);
+    return;
+  }
+
+  // 条件检查：会员激活 + 用户已关联
+  if (membership.status !== "active") {
+    console.log(
+      `Membership ${membership.id} status is ${membership.status}, not active`
+    );
+    return;
+  }
+
+  if (!membership.userId) {
+    console.log(`Membership ${membership.id} has no userId`);
+    return;
+  }
+
+  // 发放优惠券（内置幂等性检查，基于 membershipPeriodStart）
+  await createMembershipCoupons(membership.userId, membership.id, periodStart);
+  console.log(`Subscription ${subscriptionId} benefits processed`);
+}
+
+// ============================================================================
+// Webhook 主入口
+// ============================================================================
 
 export async function POST(request: NextRequest) {
   if (!webhookSecret) {
@@ -107,6 +253,12 @@ export async function POST(request: NextRequest) {
       case "checkout.session.completed":
         await handleCheckoutSessionCompleted(
           event.data.object as Stripe.Checkout.Session
+        );
+        break;
+
+      case "payment_intent.succeeded":
+        await handlePaymentIntentSucceeded(
+          event.data.object as Stripe.PaymentIntent
         );
         break;
 
@@ -170,20 +322,37 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ============================================================================
+// 事件处理函数
+// ============================================================================
+
 async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session
 ) {
   const userId = session.client_reference_id;
   const paymentType = session.metadata?.type;
+  const paymentStatus = session.payment_status; // "paid" | "unpaid" | "no_payment_required"
 
   if (!userId) {
     console.error("No client_reference_id in checkout session");
     return;
   }
 
-  // 更新 payment 记录（订阅 checkout.session.completed 通常没有 payment_intent）
+  // 根据 payment_status 决定支付状态
+  // 如果 payment_status 是 "paid"，可以直接标记成功
+  // 否则标记为 processing，等待 payment_intent.succeeded 或 invoice.payment_succeeded
+  const paymentStatusValue =
+    paymentStatus === "paid" ? "succeeded" : "processing";
+
+  // 更新 payment 记录
   const paymentUpdate: Partial<typeof payments.$inferInsert> = {
-    status: "succeeded",
+    status: paymentStatusValue as
+      | "pending"
+      | "processing"
+      | "succeeded"
+      | "failed"
+      | "refunded"
+      | "canceled",
     updatedAt: new Date(),
   };
 
@@ -202,114 +371,44 @@ async function handleCheckoutSessionCompleted(
     .set(paymentUpdate)
     .where(eq(payments.stripeCheckoutSessionId, session.id));
 
+  // 获取更新后的 payment 记录
+  const payment = await db.query.payments.findFirst({
+    where: eq(payments.stripeCheckoutSessionId, session.id),
+  });
+
   if (paymentType === "one_time") {
-    // 一次性支付 - 创建订单或更新已有订单
-    const cartId = session.metadata?.cartId;
+    // 一次性支付 - 订单应该在 checkout 之前已创建
     const orderId = session.metadata?.orderId;
 
-    if (cartId) {
-      // 基于购物车的支付 - 创建新订单
-      const cart = await db.query.carts.findFirst({
-        where: eq(carts.id, parseInt(cartId)),
-        with: {
-          lineItems: {
-            with: {
-              product: true,
-            },
-          },
-          user: true,
-        },
-      });
+    if (!orderId) {
+      console.error(
+        "No orderId in checkout session metadata for one_time payment"
+      );
+      return;
+    }
 
-      if (!cart) return;
+    // 验证订单存在
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, parseInt(orderId)),
+    });
 
-      // 创建订单
-      const [order] = await db
-        .insert(orders)
-        .values({
-          name: session.customer_details?.name || cart.user?.name || "Guest",
-          address: formatShippingAddress(
-            (session as any).shipping_details?.address
-          ),
-          email: session.customer_details?.email || cart.user?.email || "",
-          payType: "Credit card",
-          userId: userId,
-        })
-        .returning();
+    if (!order) {
+      console.error(`Order ${orderId} not found`);
+      return;
+    }
 
-      // 将购物车商品转移到订单
-      for (const item of cart.lineItems) {
-        await db
-          .update(lineItems)
-          .set({
-            orderId: order.id,
-            cartId: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(lineItems.id, item.id));
+    // 更新 payment 关联订单（确保关联正确）
+    await db
+      .update(payments)
+      .set({
+        orderId: order.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.stripeCheckoutSessionId, session.id));
 
-        // 更新商品销量
-        await db
-          .update(products)
-          .set({
-            salesCount: sql`${products.salesCount} + ${item.quantity}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(products.id, item.productId));
-      }
-
-      // 更新 payment 关联订单
-      await db
-        .update(payments)
-        .set({
-          orderId: order.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.stripeCheckoutSessionId, session.id));
-    } else if (orderId) {
-      // 基于订单的支付 - 订单已存在，只需更新销量
-      const order = await db.query.orders.findFirst({
-        where: eq(orders.id, parseInt(orderId)),
-        with: {
-          lineItems: {
-            with: {
-              product: true,
-            },
-          },
-        },
-      });
-
-      if (!order) return;
-
-      // 更新商品销量
-      for (const item of order.lineItems) {
-        await db
-          .update(products)
-          .set({
-            salesCount: sql`${products.salesCount} + ${item.quantity}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(products.id, item.productId));
-      }
-
-      // 更新 payment 关联订单（如果还没关联）
-      await db
-        .update(payments)
-        .set({
-          orderId: order.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(payments.stripeCheckoutSessionId, session.id));
-
-      // 处理优惠券使用完成
-      const couponIdStr = session.metadata?.couponId;
-      if (couponIdStr && orderId) {
-        const couponId = parseInt(couponIdStr);
-        if (!isNaN(couponId)) {
-          await applyCoupon(couponId, parseInt(orderId));
-          console.log(`Applied coupon ${couponId} to order ${orderId}`);
-        }
-      }
+    // 尝试发放权益
+    if (payment) {
+      await tryFinalizeOneTimePayment(payment.id);
     }
   } else if (paymentType === "subscription") {
     // 订阅支付 - 处理会员订阅
@@ -326,7 +425,7 @@ async function handleCheckoutSessionCompleted(
       return;
     }
 
-    // 获取订阅详情以获取周期信息（周期字段优先从 subscription.items.data[0] 读取）
+    // 获取订阅详情以获取周期信息
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
 
@@ -351,6 +450,10 @@ async function handleCheckoutSessionCompleted(
     const periodEnd =
       periodInfo.endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+    // 如果 payment_status 是 paid，会员状态设为 active
+    // 否则设为 pending，等待 invoice.payment_succeeded 确认
+    const membershipStatus = paymentStatus === "paid" ? "active" : "pending";
+
     // 创建或更新会员记录
     let membership = await db.query.userMemberships.findFirst({
       where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
@@ -364,16 +467,70 @@ async function handleCheckoutSessionCompleted(
           stripeSubscriptionId: subscriptionId,
           stripeCustomerId,
           stripePriceId: priceId,
-          status: "active",
+          status: membershipStatus as
+            | "active"
+            | "canceled"
+            | "expired"
+            | "pending",
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
         })
         .returning();
       membership = newMembership;
+    } else if (membership.status !== "active" && paymentStatus === "paid") {
+      // 更新状态为 active
+      await db
+        .update(userMemberships)
+        .set({
+          status: "active",
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(userMemberships.id, membership.id));
     }
 
-    // 发放优惠券（幂等性检查内置于服务中）
-    await createMembershipCoupons(userId, membership.id, periodStart);
+    // 尝试发放权益（如果条件满足）
+    await tryFinalizeSubscription(subscriptionId, periodStart);
+  }
+}
+
+async function handlePaymentIntentSucceeded(
+  paymentIntent: Stripe.PaymentIntent
+) {
+  // 查找关联的 payment 记录
+  const payment = await db.query.payments.findFirst({
+    where: eq(payments.stripePaymentIntentId, paymentIntent.id),
+  });
+
+  if (!payment) {
+    console.log(
+      `No payment record found for payment_intent: ${paymentIntent.id}`
+    );
+    return;
+  }
+
+  // 幂等性检查：如果已经是 succeeded，仍尝试发放权益（可能之前订单未关联）
+  if (payment.status === "succeeded") {
+    console.log(`Payment ${payment.id} already succeeded`);
+    if (payment.paymentType === "one_time") {
+      await tryFinalizeOneTimePayment(payment.id);
+    }
+    return;
+  }
+
+  // 更新支付状态为成功
+  await db
+    .update(payments)
+    .set({
+      status: "succeeded",
+      updatedAt: new Date(),
+    })
+    .where(eq(payments.id, payment.id));
+
+  // 尝试发放权益
+  if (payment.paymentType === "one_time") {
+    await tryFinalizeOneTimePayment(payment.id);
   }
 }
 
@@ -400,7 +557,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     status = "pending";
   }
 
-  // 验证周期时间有效性（优先从 subscription.items.data[0] 读取；缺失则 retrieve 补全）
+  // 验证周期时间有效性
   let periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
   if (!periodInfo.startDate || !periodInfo.endDate) {
     try {
@@ -411,8 +568,6 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     }
   }
 
-  const rawPeriodStart = periodInfo.rawPeriodStart;
-  const rawPeriodEnd = periodInfo.rawPeriodEnd;
   const updateData: Partial<typeof userMemberships.$inferInsert> = {
     status,
     cancelAt: subscription.cancel_at
@@ -456,53 +611,73 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  // 订阅续费成功时发放优惠券（首次订阅在 checkout.session.completed 中处理）
-  if (
-    (invoice as any).subscription &&
-    invoice.billing_reason === "subscription_cycle"
-  ) {
-    const subscriptionId = (invoice as any).subscription as string;
+  const subscriptionId = (invoice as any).subscription as string;
 
-    const membership = await db.query.userMemberships.findFirst({
-      where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
-    });
-
-    if (membership) {
-      // 获取当前订阅周期开始时间
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      let periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
-      if (!periodInfo.startDate) {
-        console.error(
-          "Invalid current_period_start in subscription",
-          subscriptionId,
-          periodInfo.rawPeriodStart
-        );
-        return; // 跳过此次处理
-      }
-
-      const periodStart = periodInfo.startDate;
-
-      // 更新会员周期信息
-      const updateData: Partial<typeof userMemberships.$inferInsert> = {
-        currentPeriodStart: periodStart,
-        updatedAt: new Date(),
-      };
-
-      if (periodInfo.endDate) updateData.currentPeriodEnd = periodInfo.endDate;
-
-      await db
-        .update(userMemberships)
-        .set(updateData)
-        .where(eq(userMemberships.id, membership.id));
-
-      // 发放优惠券（幂等性检查内置于服务中）
-      await createMembershipCoupons(
-        membership.userId,
-        membership.id,
-        periodStart
-      );
-    }
+  if (!subscriptionId) {
+    console.log("No subscription in invoice, skipping");
+    return;
   }
+
+  // 查找关联的 payment 记录（通过 invoice ID）
+  const payment = await db.query.payments.findFirst({
+    where: eq(payments.stripeInvoiceId, invoice.id),
+  });
+
+  if (payment && payment.status !== "succeeded") {
+    // 更新支付状态为成功
+    await db
+      .update(payments)
+      .set({
+        status: "succeeded",
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, payment.id));
+  }
+
+  // 查找会员记录
+  const membership = await db.query.userMemberships.findFirst({
+    where: eq(userMemberships.stripeSubscriptionId, subscriptionId),
+  });
+
+  if (!membership) {
+    console.log(`Membership not found for subscription: ${subscriptionId}`);
+    return;
+  }
+
+  // 获取周期信息
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const periodInfo = getSubscriptionPeriodFromFirstItem(subscription);
+
+  if (!periodInfo.startDate) {
+    console.error(
+      "Invalid current_period_start in subscription",
+      subscriptionId,
+      periodInfo.rawPeriodStart
+    );
+    return;
+  }
+
+  const periodStart = periodInfo.startDate;
+
+  // 更新会员状态为 active（如果不是 active）
+  const updateData: Partial<typeof userMemberships.$inferInsert> = {
+    currentPeriodStart: periodStart,
+    updatedAt: new Date(),
+  };
+
+  if (membership.status !== "active") {
+    updateData.status = "active";
+  }
+
+  if (periodInfo.endDate) updateData.currentPeriodEnd = periodInfo.endDate;
+
+  await db
+    .update(userMemberships)
+    .set(updateData)
+    .where(eq(userMemberships.id, membership.id));
+
+  // 尝试发放权益
+  await tryFinalizeSubscription(subscriptionId, periodStart);
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {
