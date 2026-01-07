@@ -61,7 +61,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -79,7 +79,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "无权限访问",
+        error: "禁止访问",
       });
     });
 
@@ -229,7 +229,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -246,7 +246,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "无权限访问",
+        error: "禁止访问",
       });
     });
 
@@ -291,7 +291,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -308,7 +308,7 @@ describe("商品管理 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "无权限访问",
+        error: "禁止访问",
       });
     });
 

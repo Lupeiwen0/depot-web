@@ -5,27 +5,24 @@ import { orders, lineItems, carts } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { eq, and, isNull } from "drizzle-orm";
-import { redirect } from "next/navigation";
 import { z } from "zod";
-
-const checkoutSchema = z.object({
-  name: z.string().min(1, "请输入收货人姓名"),
-  address: z.string().min(1, "请输入收货地址"),
-  email: z.string().email("请输入有效的邮箱地址"),
-  payType: z.enum(["Check", "Credit card", "Purchase order"]),
-});
+import { getServerTranslations } from "@/lib/server-i18n";
+import { createOrderSchema, formatZodError } from "@/lib/errors";
 
 export async function createOrder(formData: FormData) {
+  const { t } = await getServerTranslations();
+
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return { success: false, error: "请先登录" };
+      return { success: false, error: t("api.auth.notLoggedIn") };
     }
 
     // 验证表单数据
+    const checkoutSchema = createOrderSchema(t);
     const validatedData = checkoutSchema.parse({
       name: formData.get("name"),
       address: formData.get("address"),
@@ -44,7 +41,7 @@ export async function createOrder(formData: FormData) {
     });
 
     if (!cart || cart.lineItems.length === 0) {
-      return { success: false, error: "购物车是空的" };
+      return { success: false, error: t("api.order.cartEmpty") };
     }
 
     // 创建订单
@@ -72,9 +69,9 @@ export async function createOrder(formData: FormData) {
     return { success: true, orderId: order.id };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.issues[0].message };
+      return { success: false, ...formatZodError(error) };
     }
     console.error("Create order error:", error);
-    return { success: false, error: "创建订单失败，请重试" };
+    return { success: false, error: t("api.order.createFailed") };
   }
 }

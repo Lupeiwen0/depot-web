@@ -528,6 +528,11 @@
     "all": "All"
   },
   "api": {
+    "cart": {
+      "addFailed": "Failed to add to cart, please try again",
+      "updateFailed": "Failed to update cart, please try again",
+      "removeFailed": "Failed to remove item, please try again"
+    },
     "auth": {
       "notLoggedIn": "Not logged in",
       "unauthorized": "Unauthorized",
@@ -553,7 +558,17 @@
       "invalidId": "Invalid ID",
       "notFound": "Not found",
       "alreadyExists": "Already exists",
-      "invalidRole": "Invalid role"
+      "invalidRole": "Invalid role",
+      "product": {
+        "titleRequired": "Please enter product name",
+        "invalidImageUrl": "Please enter a valid image URL",
+        "priceMin": "Price must be at least 0.01"
+      },
+      "order": {
+        "nameRequired": "Please enter recipient name",
+        "addressRequired": "Please enter shipping address",
+        "invalidEmail": "Please enter a valid email address"
+      }
     },
     "upload": {
       "noFile": "Please select a file to upload",
@@ -569,7 +584,9 @@
       "createFailed": "Failed to create product",
       "updateFailed": "Failed to update product",
       "deleteFailed": "Failed to delete product",
-      "getFailed": "Failed to get products"
+      "getFailed": "Failed to get products",
+      "inCartCannotDelete": "This product is in a shopping cart and cannot be deleted",
+      "toggleStatusFailed": "Failed to toggle product status"
     },
     "tag": {
       "nameRequired": "Tag name is required",
@@ -594,7 +611,8 @@
       "createFailed": "Failed to create order",
       "updateFailed": "Failed to update order",
       "deleteFailed": "Failed to delete order",
-      "getFailed": "Failed to get orders"
+      "getFailed": "Failed to get orders",
+      "cartEmpty": "Shopping cart is empty"
     },
     "checkout": {
       "getFailed": "Failed to get checkout data"

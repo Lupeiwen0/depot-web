@@ -7,25 +7,16 @@ import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getServerTranslations } from "@/lib/server-i18n";
+import { createProductSchema, formatZodError } from "@/lib/errors";
 
-const productSchema = z.object({
-  title: z.string().min(1, "请输入商品名称"),
-  description: z.string().optional(),
-  imageUrl: z.string().url("请输入有效的图片链接").optional().or(z.literal("")),
-  price: z.string().refine((val) => {
-    const num = parseFloat(val);
-    return !isNaN(num) && num >= 0.01;
-  }, "价格必须大于等于 0.01"),
-  tags: z.array(z.string()).optional(),
-});
-
-async function checkAdmin() {
+async function checkAdmin(t: (key: string) => string) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
   if (!session?.user) {
-    return { isAdmin: false, error: "请先登录" };
+    return { isAdmin: false, error: t("api.auth.notLoggedIn") };
   }
 
   const userRecord = await db.query.user.findFirst({
@@ -33,15 +24,17 @@ async function checkAdmin() {
   });
 
   if (userRecord?.role !== "admin") {
-    return { isAdmin: false, error: "无权限访问" };
+    return { isAdmin: false, error: t("api.auth.forbidden") };
   }
 
   return { isAdmin: true };
 }
 
 export async function createProduct(formData: FormData) {
+  const { t } = await getServerTranslations();
+
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return { success: false, error: adminCheck.error };
     }
@@ -57,6 +50,7 @@ export async function createProduct(formData: FormData) {
       }
     }
 
+    const productSchema = createProductSchema(t);
     const validatedData = productSchema.parse({
       title: formData.get("title"),
       description: formData.get("description") || undefined,
@@ -78,16 +72,18 @@ export async function createProduct(formData: FormData) {
     return { success: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.issues[0].message };
+      return { success: false, ...formatZodError(error) };
     }
     console.error("Create product error:", error);
-    return { success: false, error: "创建商品失败" };
+    return { success: false, error: t("api.product.createFailed") };
   }
 }
 
 export async function updateProduct(id: number, formData: FormData) {
+  const { t } = await getServerTranslations();
+
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return { success: false, error: adminCheck.error };
     }
@@ -103,6 +99,7 @@ export async function updateProduct(id: number, formData: FormData) {
       }
     }
 
+    const productSchema = createProductSchema(t);
     const validatedData = productSchema.parse({
       title: formData.get("title"),
       description: formData.get("description") || undefined,
@@ -128,16 +125,18 @@ export async function updateProduct(id: number, formData: FormData) {
     return { success: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.issues[0].message };
+      return { success: false, ...formatZodError(error) };
     }
     console.error("Update product error:", error);
-    return { success: false, error: "更新商品失败" };
+    return { success: false, error: t("api.product.updateFailed") };
   }
 }
 
 export async function deleteProduct(id: number) {
+  const { t } = await getServerTranslations();
+
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return { success: false, error: adminCheck.error };
     }
@@ -150,15 +149,17 @@ export async function deleteProduct(id: number) {
   } catch (error: any) {
     console.error("Delete product error:", error);
     if (error.message?.includes("violates foreign key constraint")) {
-      return { success: false, error: "该商品已被添加到购物车，无法删除" };
+      return { success: false, error: t("api.product.inCartCannotDelete") };
     }
-    return { success: false, error: "删除商品失败" };
+    return { success: false, error: t("api.product.deleteFailed") };
   }
 }
 
 export async function toggleProductStatus(id: number) {
+  const { t } = await getServerTranslations();
+
   try {
-    const adminCheck = await checkAdmin();
+    const adminCheck = await checkAdmin(t);
     if (!adminCheck.isAdmin) {
       return { success: false, error: adminCheck.error };
     }
@@ -169,7 +170,7 @@ export async function toggleProductStatus(id: number) {
     });
 
     if (!product) {
-      return { success: false, error: "商品不存在" };
+      return { success: false, error: t("api.product.notFound") };
     }
 
     // 切换状态
@@ -186,6 +187,6 @@ export async function toggleProductStatus(id: number) {
     return { success: true };
   } catch (error) {
     console.error("Toggle product status error:", error);
-    return { success: false, error: "切换商品状态失败" };
+    return { success: false, error: t("api.product.toggleStatusFailed") };
   }
 }

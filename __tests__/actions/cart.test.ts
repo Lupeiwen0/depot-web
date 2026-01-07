@@ -58,7 +58,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -146,7 +146,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "添加失败，请重试",
+        error: "添加到购物车失败，请重试",
       });
     });
   });
@@ -159,7 +159,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -220,7 +220,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "更新失败，请重试",
+        error: "更新购物车失败，请重试",
       });
     });
   });
@@ -233,7 +233,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -264,7 +264,7 @@ describe("购物车 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "删除失败，请重试",
+        error: "移除商品失败，请重试",
       });
     });
   });

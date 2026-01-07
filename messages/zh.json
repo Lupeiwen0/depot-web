@@ -527,6 +527,11 @@
     "all": "全部"
   },
   "api": {
+    "cart": {
+      "addFailed": "添加到购物车失败，请重试",
+      "updateFailed": "更新购物车失败，请重试",
+      "removeFailed": "移除商品失败，请重试"
+    },
     "auth": {
       "notLoggedIn": "未登录",
       "unauthorized": "未授权",
@@ -552,7 +557,17 @@
       "invalidId": "无效的 ID",
       "notFound": "未找到",
       "alreadyExists": "已存在",
-      "invalidRole": "无效的角色"
+      "invalidRole": "无效的角色",
+      "product": {
+        "titleRequired": "请输入商品名称",
+        "invalidImageUrl": "请输入有效的图片链接",
+        "priceMin": "价格必须大于等于 0.01"
+      },
+      "order": {
+        "nameRequired": "请输入收货人姓名",
+        "addressRequired": "请输入收货地址",
+        "invalidEmail": "请输入有效的邮箱地址"
+      }
     },
     "upload": {
       "noFile": "请选择要上传的文件",
@@ -568,7 +583,9 @@
       "createFailed": "创建商品失败",
       "updateFailed": "更新商品失败",
       "deleteFailed": "删除商品失败",
-      "getFailed": "获取商品失败"
+      "getFailed": "获取商品失败",
+      "inCartCannotDelete": "该商品已被添加到购物车，无法删除",
+      "toggleStatusFailed": "切换商品状态失败"
     },
     "tag": {
       "nameRequired": "标签名称为必填项",
@@ -593,7 +610,8 @@
       "createFailed": "创建订单失败",
       "updateFailed": "更新订单失败",
       "deleteFailed": "删除订单失败",
-      "getFailed": "获取订单失败"
+      "getFailed": "获取订单失败",
+      "cartEmpty": "购物车是空的"
     },
     "checkout": {
       "getFailed": "获取结账数据失败"

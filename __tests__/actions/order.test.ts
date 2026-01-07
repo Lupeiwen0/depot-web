@@ -57,7 +57,7 @@ describe("订单 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "请先登录",
+        error: "未登录",
       });
     });
 
@@ -196,7 +196,7 @@ describe("订单 Actions 测试", () => {
 
       expect(result).toEqual({
         success: false,
-        error: "创建订单失败，请重试",
+        error: "创建订单失败",
       });
     });
   });

@@ -6,15 +6,19 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getServerTranslations } from "@/lib/server-i18n";
+import { ErrorCodes } from "@/lib/errors";
 
 export async function addToCart(productId: number) {
+  const { t } = await getServerTranslations();
+
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return { success: false, error: "请先登录" };
+      return { success: false, error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) };
     }
 
     // 查找或创建用户的购物车
@@ -62,18 +66,23 @@ export async function addToCart(productId: number) {
     return { success: true };
   } catch (error) {
     console.error("Add to cart error:", error);
-    return { success: false, error: "添加失败，请重试" };
+    return { success: false, error: t(ErrorCodes.CART_ADD_FAILED) };
   }
 }
 
-export async function updateCartItemQuantity(lineItemId: number, quantity: number) {
+export async function updateCartItemQuantity(
+  lineItemId: number,
+  quantity: number
+) {
+  const { t } = await getServerTranslations();
+
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return { success: false, error: "请先登录" };
+      return { success: false, error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) };
     }
 
     if (quantity <= 0) {
@@ -94,18 +103,20 @@ export async function updateCartItemQuantity(lineItemId: number, quantity: numbe
     return { success: true };
   } catch (error) {
     console.error("Update cart item error:", error);
-    return { success: false, error: "更新失败，请重试" };
+    return { success: false, error: t(ErrorCodes.CART_UPDATE_FAILED) };
   }
 }
 
 export async function removeCartItem(lineItemId: number) {
+  const { t } = await getServerTranslations();
+
   try {
     const session = await auth.api.getSession({
       headers: await headers(),
     });
 
     if (!session?.user) {
-      return { success: false, error: "请先登录" };
+      return { success: false, error: t(ErrorCodes.AUTH_NOT_LOGGED_IN) };
     }
 
     await db.delete(lineItems).where(eq(lineItems.id, lineItemId));
@@ -114,6 +125,6 @@ export async function removeCartItem(lineItemId: number) {
     return { success: true };
   } catch (error) {
     console.error("Remove cart item error:", error);
-    return { success: false, error: "删除失败，请重试" };
+    return { success: false, error: t(ErrorCodes.CART_REMOVE_FAILED) };
   }
 }
