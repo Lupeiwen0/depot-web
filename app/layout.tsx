@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
-import { CartDrawerProvider } from "@/contexts/CartDrawerContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getLocale } from "next-intl/server";
@@ -24,10 +23,8 @@ export default async function RootLayout({
       <body>
         <ThemeProvider>
           <NextIntlClientProvider messages={messages}>
-            <CartDrawerProvider>
-              <Header />
-              {children}
-            </CartDrawerProvider>
+            <Header />
+            {children}
           </NextIntlClientProvider>
         </ThemeProvider>
       </body>

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { Trash2, Plus, Minus } from "lucide-react";
-import { updateCartItemQuantity, removeCartItem } from "@/app/actions/cart";
 import { useState } from "react";
 
 type CartItem = {
@@ -24,7 +23,12 @@ type CartItem = {
   };
 };
 
-export default function CartItems({ items }: { items: CartItem[] }) {
+export default function CartItems({
+  items: initialItems,
+}: {
+  items: CartItem[];
+}) {
+  const [items, setItems] = useState<CartItem[]>(initialItems);
   const [loadingItems, setLoadingItems] = useState<Set<number>>(new Set());
 
   const handleQuantityChange = async (
@@ -32,17 +36,52 @@ export default function CartItems({ items }: { items: CartItem[] }) {
     newQuantity: number
   ) => {
     setLoadingItems((prev) => new Set(prev).add(lineItemId));
-    await updateCartItemQuantity(lineItemId, newQuantity);
-    setLoadingItems((prev) => {
-      const next = new Set(prev);
-      next.delete(lineItemId);
-      return next;
-    });
+
+    try {
+      const res = await fetch(`/api/cart/${lineItemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: newQuantity }),
+      });
+
+      if (res.ok) {
+        if (newQuantity <= 0) {
+          setItems((prev) => prev.filter((item) => item.id !== lineItemId));
+        } else {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === lineItemId ? { ...item, quantity: newQuantity } : item
+            )
+          );
+        }
+      }
+    } finally {
+      setLoadingItems((prev) => {
+        const next = new Set(prev);
+        next.delete(lineItemId);
+        return next;
+      });
+    }
   };
 
   const handleRemove = async (lineItemId: number) => {
     setLoadingItems((prev) => new Set(prev).add(lineItemId));
-    await removeCartItem(lineItemId);
+
+    try {
+      const res = await fetch(`/api/cart/${lineItemId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setItems((prev) => prev.filter((item) => item.id !== lineItemId));
+      }
+    } finally {
+      setLoadingItems((prev) => {
+        const next = new Set(prev);
+        next.delete(lineItemId);
+        return next;
+      });
+    }
   };
 
   return (

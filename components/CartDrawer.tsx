@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Trash2, Plus, Minus, ShoppingCart } from "lucide-react";
-import { updateCartItemQuantity, removeCartItem } from "@/app/actions/cart";
 import {
   Sheet,
   SheetContent,
@@ -13,8 +12,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useCartDrawer } from "@/contexts/CartDrawerContext";
 import { useTranslations } from "next-intl";
+import { useCartStore } from "@/stores/cart-store";
 
 export type CartItem = {
   id: number;
@@ -36,48 +35,84 @@ export type CartItem = {
 };
 
 type CartDrawerProps = {
-  initialItems: CartItem[];
+  initialItems?: CartItem[];
 };
 
-export default function CartDrawer({ initialItems }: CartDrawerProps) {
-  const { isOpen, closeDrawer } = useCartDrawer();
-  const [items, setItems] = useState<CartItem[]>(initialItems);
+export default function CartDrawer({
+  initialItems: _initialItems,
+}: CartDrawerProps) {
+  // 使用 store 管理购物车状态
+  const {
+    items: storeItems,
+    isOpen,
+    closeDrawer,
+    updateQuantity,
+    removeItem,
+    itemCount,
+  } = useCartStore();
   const [loadingItems, setLoadingItems] = useState<Set<number>>(new Set());
   const t = useTranslations("cart");
 
-  useEffect(() => {
-    setItems(initialItems);
-  }, [initialItems]);
+  // 将 store 的 items 格式转换为组件需要的格式
+  const items: CartItem[] = storeItems.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    cartId: null,
+    orderId: null,
+    quantity: item.quantity,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    product: {
+      id: item.product.id,
+      title: item.product.title,
+      description: null,
+      imageUrl: item.product.imageUrl,
+      price: item.product.price,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  }));
 
   const handleQuantityChange = async (
     lineItemId: number,
     newQuantity: number
   ) => {
     setLoadingItems((prev) => new Set(prev).add(lineItemId));
-    await updateCartItemQuantity(lineItemId, newQuantity);
-    setLoadingItems((prev) => {
-      const next = new Set(prev);
-      next.delete(lineItemId);
-      return next;
-    });
+
+    try {
+      if (newQuantity <= 0) {
+        await removeItem(lineItemId);
+      } else {
+        await updateQuantity(lineItemId, newQuantity);
+      }
+    } finally {
+      setLoadingItems((prev) => {
+        const next = new Set(prev);
+        next.delete(lineItemId);
+        return next;
+      });
+    }
   };
 
   const handleRemove = async (lineItemId: number) => {
     setLoadingItems((prev) => new Set(prev).add(lineItemId));
-    await removeCartItem(lineItemId);
-    setItems((prev) => prev.filter((item) => item.id !== lineItemId));
-    setLoadingItems((prev) => {
-      const next = new Set(prev);
-      next.delete(lineItemId);
-      return next;
-    });
+
+    try {
+      await removeItem(lineItemId);
+    } finally {
+      setLoadingItems((prev) => {
+        const next = new Set(prev);
+        next.delete(lineItemId);
+        return next;
+      });
+    }
   };
 
   const total = items.reduce((sum, item) => {
     return sum + parseFloat(item.product.price) * item.quantity;
   }, 0);
 
-  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity = itemCount;
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && closeDrawer()}>

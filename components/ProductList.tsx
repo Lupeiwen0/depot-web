@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import ProductCardWrapper from "./ProductCardWrapper";
+import { useCartStore } from "@/stores/cart-store";
 
 interface Product {
   id: number;
@@ -35,10 +36,17 @@ interface ProductListProps {
 export default function ProductList({
   initialProducts,
   initialPagination,
-  cartProductIds,
+  cartProductIds: _initialCartProductIds,
 }: ProductListProps) {
   const searchParams = useSearchParams();
   const t = useTranslations("home");
+
+  // 从 store 获取购物车商品 ID 列表，实现实时同步
+  const { items: cartItems, isInitialized } = useCartStore();
+  // 使用 isInitialized 判断：store 初始化后使用 store 数据，否则使用服务端初始值
+  const cartProductIds = isInitialized
+    ? cartItems.map((item) => item.productId)
+    : _initialCartProductIds;
 
   const [products, setProducts] = useState(initialProducts);
   const [page, setPage] = useState(initialPagination.page);

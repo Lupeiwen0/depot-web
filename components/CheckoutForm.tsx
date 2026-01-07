@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { createOrder } from "@/app/actions/order";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,10 +56,21 @@ export default function CheckoutForm({
 
     try {
       // 创建订单
-      const result = await createOrder(formData);
+      const orderRes = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          address: formData.get("address"),
+          email: formData.get("email"),
+          payType: formData.get("payType"),
+        }),
+      });
 
-      if (!result.success || !result.orderId) {
-        setError(result.error || t("createOrderFailed"));
+      const orderData = await orderRes.json();
+
+      if (!orderRes.ok || !orderData.orderId) {
+        setError(orderData.error || t("createOrderFailed"));
         setLoading(false);
         return;
       }
@@ -72,7 +82,7 @@ export default function CheckoutForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            orderId: result.orderId,
+            orderId: orderData.orderId,
             paymentType: "one_time",
             couponId: selectedCouponId || undefined,
           }),
@@ -92,7 +102,7 @@ export default function CheckoutForm({
         }
       } else {
         // 传统方式，直接跳转到订单页面
-        router.push(`/orders/${result.orderId}`);
+        router.push(`/orders/${orderData.orderId}`);
       }
     } catch (err) {
       setError(t("orderError"));
@@ -102,7 +112,9 @@ export default function CheckoutForm({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900">{t("shippingAndPayment")}</h2>
+      <h2 className="text-lg font-semibold text-gray-900">
+        {t("shippingAndPayment")}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
@@ -188,7 +200,10 @@ export default function CheckoutForm({
               <option value="">{t("noCoupon")}</option>
               {availableCoupons.map((coupon) => (
                 <option key={coupon.id} value={coupon.id}>
-                  {t("couponDiscount", { code: coupon.couponCode, percent: coupon.percentOff })}
+                  {t("couponDiscount", {
+                    code: coupon.couponCode,
+                    percent: coupon.percentOff,
+                  })}
                 </option>
               ))}
             </select>
@@ -247,7 +262,9 @@ export default function CheckoutForm({
                 <CreditCard className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{t("stripePayment")}</p>
+                <p className="font-medium text-gray-900">
+                  {t("stripePayment")}
+                </p>
                 <p className="text-sm text-gray-500">
                   {t("stripePaymentDesc")}
                 </p>
@@ -289,9 +306,7 @@ export default function CheckoutForm({
           )}
         </Button>
 
-        <p className="text-xs text-center text-gray-500">
-          {t("termsHint")}
-        </p>
+        <p className="text-xs text-center text-gray-500">{t("termsHint")}</p>
       </form>
     </div>
   );

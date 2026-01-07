@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createProduct, updateProduct } from "@/app/actions/products";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,18 +58,38 @@ export default function ProductFormDialog({
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const result = product
-      ? await updateProduct(product.id, formData)
-      : await createProduct(formData);
+    const data = {
+      title: formData.get("title") as string,
+      description: (formData.get("description") as string) || undefined,
+      imageUrl: (formData.get("imageUrl") as string) || undefined,
+      price: formData.get("price") as string,
+      tags: selectedTags,
+    };
 
-    if (result.success) {
-      onOpenChange(false);
-      onSuccess?.();
-      // Server Action 已调用 revalidatePath，页面会自动更新
-    } else {
-      setError(result.error || "操作失败");
+    try {
+      const url = product
+        ? `/api/admin/products/${product.id}`
+        : "/api/admin/products";
+      const method = product ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        onOpenChange(false);
+        onSuccess?.();
+      } else {
+        const resData = await res.json();
+        setError(resData.error || "操作失败");
+      }
+    } catch {
+      setError("操作失败");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

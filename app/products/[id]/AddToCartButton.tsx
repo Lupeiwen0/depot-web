@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "@/lib/auth-client";
-import { addToCart } from "@/app/actions/cart";
 import { Button } from "@/components/ui/button";
 import { ShoppingCart, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCartStore } from "@/stores/cart-store";
 
 interface AddToCartButtonProps {
   productId: number;
@@ -15,17 +15,28 @@ interface AddToCartButtonProps {
 
 export default function AddToCartButton({
   productId,
-  isInCart: initialIsInCart = false,
+  isInCart: _initialIsInCart = false,
 }: AddToCartButtonProps) {
   const t = useTranslations("product");
   const tHome = useTranslations("home");
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(false);
-  const [isInCart, setIsInCart] = useState(initialIsInCart);
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // 从 store 获取购物车状态，实现实时同步
+  const { items: cartItems, addItem, isInitialized } = useCartStore();
+  // 使用 isInitialized 判断：store 初始化后使用 store 数据，否则使用服务端初始值
+  const isInCart = isInitialized
+    ? cartItems.some((item) => item.productId === productId)
+    : _initialIsInCart;
+
   const handleAddToCart = async () => {
+    // 等待 session 加载完成
+    if (isPending) {
+      return;
+    }
+
     if (!session?.user) {
       window.location.href = "/login";
       return;
@@ -35,9 +46,9 @@ export default function AddToCartButton({
     setMessage("");
 
     try {
-      const result = await addToCart(productId);
+      const result = await addItem(productId);
+
       if (result.success) {
-        setIsInCart(true);
         setIsSuccess(true);
         setMessage(tHome("addedToCart"));
         setTimeout(() => setMessage(""), 3000);
@@ -90,9 +101,7 @@ export default function AddToCartButton({
         <p
           className={cn(
             "text-sm text-center py-2 px-4 rounded-lg",
-            isSuccess
-              ? "bg-green-50 text-green-600"
-              : "bg-red-50 text-red-600"
+            isSuccess ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
           )}
         >
           {message}

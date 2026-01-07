@@ -147,7 +147,9 @@
     "enterEmailFirst": "Please enter your email first",
     "sendResetFailed": "Failed to send reset email",
     "sendResetFailedRetry": "Failed to send reset email. Please try again later.",
-    "registerFailed": "Registration failed, please try again"
+    "registerFailed": "Registration failed, please try again",
+    "orContinueWith": "Or continue with",
+    "continueWithCasdoor": "Continue with Casdoor"
   },
   "resetPassword": {
     "title": "Reset Password",

@@ -12,8 +12,11 @@ export async function GET(request: NextRequest) {
     const tagsParam = searchParams.get("tags");
     const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : [];
     const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = Math.min(parseInt(searchParams.get("pageSize") || "12"), 100);
-    const sortBy = searchParams.get("sortBy") || "createdAt";
+    const pageSize = Math.min(
+      parseInt(searchParams.get("pageSize") || "12"),
+      100
+    );
+    const sortBy = searchParams.get("sortBy") || "rating";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
     // 构建查询条件
@@ -30,7 +33,10 @@ export async function GET(request: NextRequest) {
     }
 
     // 排序字段映射
-    type SortableField = typeof products.salesCount | typeof products.createdAt | typeof products.price;
+    type SortableField =
+      | typeof products.salesCount
+      | typeof products.createdAt
+      | typeof products.price;
     const sortFieldMap: Record<string, SortableField> = {
       sales: products.salesCount,
       createdAt: products.createdAt,
@@ -70,8 +76,12 @@ export async function GET(request: NextRequest) {
       .orderBy(
         isRatingSort
           ? sortOrder === "desc"
-            ? desc(sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`)
-            : asc(sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`)
+            ? desc(
+                sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`
+              )
+            : asc(
+                sql`COALESCE(CAST(${products.averageRating} AS DECIMAL(3,2)), 0)`
+              )
           : orderFn(sortField)
       )
       .limit(pageSize)

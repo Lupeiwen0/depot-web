@@ -1,10 +1,10 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
-import { carts, lineItems } from "@/db/depot-schema";
+import { carts } from "@/db/depot-schema";
 import { eq } from "drizzle-orm";
 import HeaderClient from "./HeaderClient";
-import CartDrawer, { type CartItem } from "./CartDrawer";
+import CartDrawer from "./CartDrawer";
 import { StoreProvider } from "./StoreProvider";
 
 export default async function Header() {
@@ -14,7 +14,6 @@ export default async function Header() {
 
   let userRole: "admin" | "buyer" | null = null;
   let cartItemCount = 0;
-  let cartItems: CartItem[] = [];
 
   if (session?.user) {
     const userRecord = await db.query.user.findFirst({
@@ -22,15 +21,11 @@ export default async function Header() {
     });
     userRole = userRecord?.role || null;
 
-    // 查询购物车商品数量
+    // 查询购物车商品数量（仅用于服务端初始渲染）
     const cart = await db.query.carts.findFirst({
       where: eq(carts.userId, session.user.id),
       with: {
-        lineItems: {
-          with: {
-            product: true,
-          },
-        },
+        lineItems: true,
       },
     });
 
@@ -40,7 +35,6 @@ export default async function Header() {
         (total, item) => total + (item.quantity || 0),
         0
       );
-      cartItems = cart.lineItems;
     }
   }
 
@@ -51,7 +45,7 @@ export default async function Header() {
         userRole={userRole}
         cartItemCount={cartItemCount}
       />
-      <CartDrawer initialItems={cartItems} />
+      <CartDrawer />
     </StoreProvider>
   );
 }

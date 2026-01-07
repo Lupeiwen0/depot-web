@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { createProduct, updateProduct } from "@/app/actions/products";
 import Link from "next/link";
 import TagSelector from "./TagSelector";
 
@@ -34,14 +33,35 @@ export default function ProductForm({ product }: { product?: Product }) {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const result = product
-      ? await updateProduct(product.id, formData)
-      : await createProduct(formData);
+    const data = {
+      title: formData.get("title") as string,
+      description: (formData.get("description") as string) || undefined,
+      imageUrl: (formData.get("imageUrl") as string) || undefined,
+      price: formData.get("price") as string,
+      tags: selectedTags,
+    };
 
-    if (result.success) {
-      router.push("/admin/products");
-    } else {
-      setError(result.error || t("saveFailed"));
+    try {
+      const url = product
+        ? `/api/admin/products/${product.id}`
+        : "/api/admin/products";
+      const method = product ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        router.push("/admin/products");
+      } else {
+        const resData = await res.json();
+        setError(resData.error || t("saveFailed"));
+      }
+    } catch {
+      setError(t("saveFailed"));
+    } finally {
       setLoading(false);
     }
   };
@@ -127,10 +147,7 @@ export default function ProductForm({ product }: { product?: Product }) {
           />
         </div>
 
-        <TagSelector
-          selectedTags={selectedTags}
-          onChange={setSelectedTags}
-        />
+        <TagSelector selectedTags={selectedTags} onChange={setSelectedTags} />
 
         <div className="flex gap-4">
           <button
@@ -138,7 +155,11 @@ export default function ProductForm({ product }: { product?: Product }) {
             disabled={loading}
             className="flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 font-medium"
           >
-            {loading ? tCommon("saving") : product ? t("editProduct") : t("addProduct")}
+            {loading
+              ? tCommon("saving")
+              : product
+              ? t("editProduct")
+              : t("addProduct")}
           </button>
           <Link
             href="/admin/products"

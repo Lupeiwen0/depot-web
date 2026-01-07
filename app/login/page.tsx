@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "@/lib/auth-client";
+import { signIn, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState("");
+  const [casdoorLoading, setCasdoorLoading] = useState(false);
 
   // 当从其他页面重定向到登录页时，刷新服务端组件状态（重置 Header）
   useEffect(() => {
@@ -57,6 +58,22 @@ export default function LoginPage() {
     } catch (err: any) {
       setError(err.message || t("loginFailed"));
       setLoading(false);
+    }
+  };
+
+  const handleCasdoorLogin = async () => {
+    setError("");
+    setResetSuccess("");
+    setCasdoorLoading(true);
+
+    try {
+      await authClient.signIn.oauth2({
+        providerId: "casdoor",
+        callbackURL: "/",
+      });
+    } catch (err: any) {
+      setError(err.message || t("loginFailed"));
+      setCasdoorLoading(false);
     }
   };
 
@@ -185,6 +202,52 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4 border-t p-6 bg-muted/20">
+          {/* 第三方登录区域 */}
+          <div className="w-full">
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  {t("orContinueWith")}
+                </span>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full mt-3"
+              disabled={loading || casdoorLoading}
+              onClick={handleCasdoorLogin}
+            >
+              {casdoorLoading ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-foreground border-r-transparent"></span>
+                  {t("continueWithCasdoor")}
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="mr-2 h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                    <polyline points="10 17 15 12 10 7" />
+                    <line x1="15" y1="12" x2="3" y2="12" />
+                  </svg>
+                  {t("continueWithCasdoor")}
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* 原有的注册链接 */}
           <div className="text-center text-sm text-muted-foreground">
             {t("noAccount")}{" "}
             <Link

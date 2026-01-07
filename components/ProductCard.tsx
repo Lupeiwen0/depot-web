@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useSession } from "@/lib/auth-client";
 import { useTranslations } from "next-intl";
-import { addToCart } from "@/app/actions/cart";
 import { useState } from "react";
 import {
   Card,
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShoppingCart, Star } from "lucide-react";
+import { useCartStore } from "@/stores/cart-store";
 
 type Product = {
   id: number;
@@ -37,13 +37,20 @@ export default function ProductCard({
   product: Product;
   isInCart?: boolean;
 }) {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const t = useTranslations("home");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const { addItem } = useCartStore();
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault(); // Prevent any parent link clicks if applicable
+
+    // 等待 session 加载完成
+    if (isPending) {
+      return;
+    }
+
     if (!session?.user) {
       window.location.href = "/login";
       return;
@@ -53,7 +60,8 @@ export default function ProductCard({
     setMessage("");
 
     try {
-      const result = await addToCart(product.id);
+      const result = await addItem(product.id);
+
       if (result.success) {
         setMessage(t("added"));
         setTimeout(() => setMessage(""), 2000);

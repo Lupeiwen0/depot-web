@@ -27,7 +27,7 @@ export default function SortSelector() {
     { value: "price-desc", label: t("priceDesc") },
   ];
 
-  const currentSort = searchParams.get("sortBy") || "sales";
+  const currentSort = searchParams.get("sortBy") || "rating";
   const currentOrder = searchParams.get("sortOrder") || "desc";
   const currentValue =
     currentSort === "price" ? `price-${currentOrder}` : currentSort;
@@ -58,7 +58,11 @@ export default function SortSelector() {
         <ArrowUpDown className="h-4 w-4" />
         {t("label")}:
       </span>
-      <Select value={currentValue} onValueChange={handleSort} disabled={isPending}>
+      <Select
+        value={currentValue}
+        onValueChange={handleSort}
+        disabled={isPending}
+      >
         <SelectTrigger className="w-[140px] bg-white/60 dark:bg-gray-800/60 border-white/40 dark:border-gray-600/40">
           <SelectValue />
         </SelectTrigger>

@@ -20,12 +20,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useCartDrawer } from "@/contexts/CartDrawerContext";
 import ChangePasswordDialog from "./ChangePasswordDialog";
 import { SubscriptionManageButton } from "./SubscriptionManageButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageToggle } from "./LanguageToggle";
 import { useTranslations } from "next-intl";
+import { useCartStore } from "@/stores/cart-store";
 
 type Session = {
   user: {
@@ -38,13 +38,21 @@ type Session = {
 export default function HeaderClient({
   session,
   userRole,
-  cartItemCount,
+  cartItemCount: _initialCartItemCount,
 }: {
   session: Session;
   userRole: "admin" | "buyer" | null;
   cartItemCount: number;
 }) {
-  const { openDrawer } = useCartDrawer();
+  // 使用 store 的 itemCount 和 openDrawer，实现实时同步
+  const {
+    itemCount: storeItemCount,
+    openDrawer,
+    isInitialized,
+  } = useCartStore();
+  // 使用 isInitialized 判断：store 初始化后使用 store 数据，否则使用服务端初始值
+  const cartItemCount = isInitialized ? storeItemCount : _initialCartItemCount;
+
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const t = useTranslations("header");

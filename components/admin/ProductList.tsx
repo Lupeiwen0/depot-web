@@ -4,7 +4,6 @@ import { useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Pencil, Trash2, Eye, EyeOff } from "lucide-react";
-import { deleteProduct, toggleProductStatus } from "@/app/actions/products";
 import ProductFormDialog from "./ProductFormDialog";
 
 type Product = {
@@ -32,13 +31,21 @@ export default function ProductList({
 
   const handleToggleStatus = async (id: number, currentStatus: boolean) => {
     setToggling(id);
-    const result = await toggleProductStatus(id);
-    if (!result.success) {
-      alert(result.error || "操作失败");
-    } else {
-      onRefresh?.();
+
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "PATCH",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "操作失败");
+      } else {
+        onRefresh?.();
+      }
+    } finally {
+      setToggling(null);
     }
-    setToggling(null);
   };
 
   const handleDelete = async (id: number, title: string) => {
@@ -47,13 +54,21 @@ export default function ProductList({
     }
 
     setDeleting(id);
-    const result = await deleteProduct(id);
-    if (!result.success) {
-      alert(result.error || "删除失败");
-    } else {
-      onRefresh?.();
+
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "删除失败");
+      } else {
+        onRefresh?.();
+      }
+    } finally {
+      setDeleting(null);
     }
-    setDeleting(null);
   };
 
   return (
