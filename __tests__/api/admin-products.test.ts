@@ -56,7 +56,11 @@ const mockProduct = {
   price: "99.99",
   isActive: true,
   tags: ["hot"],
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
 };
+
+const mockProductsList = [mockProduct];
 
 jest.mock("@/db", () => ({
   db: {
@@ -68,6 +72,17 @@ jest.mock("@/db", () => ({
         findFirst: jest.fn().mockResolvedValue(mockProduct),
       },
     },
+    select: jest.fn(() => ({
+      from: jest.fn(() => ({
+        where: jest.fn(() => ({
+          orderBy: jest.fn(() => ({
+            limit: jest.fn(() => ({
+              offset: jest.fn().mockResolvedValue(mockProductsList),
+            })),
+          })),
+        })),
+      })),
+    })),
     insert: jest.fn(() => ({
       values: jest.fn(() => ({
         returning: jest.fn().mockResolvedValue([mockProduct]),
@@ -85,10 +100,20 @@ jest.mock("@/db", () => ({
 }));
 
 jest.mock("@/db/schema", () => ({
-  products: { id: "id" },
+  products: {
+    id: "id",
+    title: "title",
+    description: "description",
+    price: "price",
+    imageUrl: "image_url",
+    tags: "tags",
+    isActive: "is_active",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
 }));
 
-import { POST } from "@/app/api/admin/products/route";
+import { GET, POST } from "@/app/api/admin/products/route";
 import { PUT, PATCH, DELETE } from "@/app/api/admin/products/[id]/route";
 
 describe("Admin Products API", () => {
@@ -103,6 +128,106 @@ describe("Admin Products API", () => {
     price: "99.99",
     tags: ["hot"],
   };
+
+  describe("GET /api/admin/products", () => {
+    it("should return 401 when not logged in", async () => {
+      const { auth } = require("@/lib/auth");
+      auth.api.getSession.mockResolvedValue(null);
+
+      const request = new NextRequest(
+        "http://localhost:3000/api/admin/products"
+      );
+
+      const response = await GET(request);
+      expect(response.status).toBe(401);
+    });
+
+    it("should return 403 when not admin", async () => {
+      const { auth } = require("@/lib/auth");
+      auth.api.getSession.mockResolvedValue(mockBuyerSession);
+
+      const { db } = require("@/db");
+      db.query.user.findFirst.mockResolvedValue(mockBuyerUser);
+
+      const request = new NextRequest(
+        "http://localhost:3000/api/admin/products"
+      );
+
+      const response = await GET(request);
+      expect(response.status).toBe(403);
+    });
+
+    it("should return products list successfully", async () => {
+      const { auth } = require("@/lib/auth");
+      auth.api.getSession.mockResolvedValue(mockAdminSession);
+
+      const { db } = require("@/db");
+      db.query.user.findFirst.mockResolvedValue(mockAdminUser);
+      // Mock count query
+      db.select.mockReturnValueOnce({
+        from: jest.fn(() => ({
+          where: jest.fn().mockResolvedValue([{ count: 1 }]),
+        })),
+      });
+      // Mock products query
+      db.select.mockReturnValueOnce({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn().mockResolvedValue(mockProductsList),
+              })),
+            })),
+          })),
+        })),
+      });
+
+      const request = new NextRequest(
+        "http://localhost:3000/api/admin/products?page=1&pageSize=20"
+      );
+
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty("products");
+      expect(data).toHaveProperty("pagination");
+      expect(Array.isArray(data.products)).toBe(true);
+    });
+
+    it("should handle search parameter", async () => {
+      const { auth } = require("@/lib/auth");
+      auth.api.getSession.mockResolvedValue(mockAdminSession);
+
+      const { db } = require("@/db");
+      db.query.user.findFirst.mockResolvedValue(mockAdminUser);
+      // Mock count query
+      db.select.mockReturnValueOnce({
+        from: jest.fn(() => ({
+          where: jest.fn().mockResolvedValue([{ count: 0 }]),
+        })),
+      });
+      // Mock products query
+      db.select.mockReturnValueOnce({
+        from: jest.fn(() => ({
+          where: jest.fn(() => ({
+            orderBy: jest.fn(() => ({
+              limit: jest.fn(() => ({
+                offset: jest.fn().mockResolvedValue([]),
+              })),
+            })),
+          })),
+        })),
+      });
+
+      const request = new NextRequest(
+        "http://localhost:3000/api/admin/products?search=测试"
+      );
+
+      const response = await GET(request);
+      expect(response.status).toBe(200);
+    });
+  });
 
   describe("POST /api/admin/products", () => {
     it("should return 401 when not logged in", async () => {
