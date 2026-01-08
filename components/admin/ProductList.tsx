@@ -23,7 +23,7 @@ export default function ProductList({
   onRefresh,
 }: {
   products: Product[];
-  onRefresh?: () => void;
+  onRefresh?: (options?: { checkEmptyPage?: boolean }) => void;
 }) {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
@@ -64,7 +64,7 @@ export default function ProductList({
         const data = await res.json();
         alert(data.error || "删除失败");
       } else {
-        onRefresh?.();
+        onRefresh?.({ checkEmptyPage: true });
       }
     } finally {
       setDeleting(null);

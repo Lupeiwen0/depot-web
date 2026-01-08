@@ -10,11 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import ProductList from "./ProductList";
 import ProductFormDialog from "./ProductFormDialog";
 import { useTranslations } from "next-intl";
-import { cn } from "@/lib/utils";
+import { DataPagination } from "@/components/ui/data-pagination";
 
 type Product = {
   id: number;
@@ -52,7 +52,6 @@ export default function ProductsContainer({
   allTags?: string[];
 }) {
   const t = useTranslations("admin.products");
-  const tPagination = useTranslations("pagination");
 
   // 状态
   const [products, setProducts] = useState<Product[]>(initialProducts || []);
@@ -82,36 +81,56 @@ export default function ProductsContainer({
   ];
 
   // 获取商品数据
-  const fetchProducts = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [sortField, sortOrder] = sortBy.split("-");
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        pageSize: "20",
-        sortBy: sortField,
-        sortOrder: sortOrder,
-      });
+  const fetchProducts = useCallback(
+    async (options?: { checkEmptyPage?: boolean }) => {
+      setIsLoading(true);
+      try {
+        const [sortField, sortOrder] = sortBy.split("-");
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          pageSize: "20",
+          sortBy: sortField,
+          sortOrder: sortOrder,
+        });
 
-      if (search) params.set("search", search);
-      if (minPrice) params.set("minPrice", minPrice);
-      if (maxPrice) params.set("maxPrice", maxPrice);
-      if (selectedTag && selectedTag !== "all") params.set("tag", selectedTag);
+        if (search) params.set("search", search);
+        if (minPrice) params.set("minPrice", minPrice);
+        if (maxPrice) params.set("maxPrice", maxPrice);
+        if (selectedTag && selectedTag !== "all")
+          params.set("tag", selectedTag);
 
-      const res = await fetch(`/api/admin/products?${params.toString()}`);
-      if (!res.ok) throw new Error("获取商品失败");
+        const res = await fetch(`/api/admin/products?${params.toString()}`);
+        if (!res.ok) throw new Error("获取商品失败");
 
-      const data = await res.json();
-      setProducts(data.products || []);
-      setPagination(
-        data.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 0 }
-      );
-    } catch (error) {
-      console.error("Fetch products error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentPage, search, minPrice, maxPrice, selectedTag, sortBy]);
+        const data = await res.json();
+        const fetchedProducts = data.products || [];
+        const fetchedPagination = data.pagination || {
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+        };
+
+        // 如果删除后当前页没有数据了，且不是第一页，则返回前一页
+        if (
+          options?.checkEmptyPage &&
+          fetchedProducts.length === 0 &&
+          currentPage > 1
+        ) {
+          setCurrentPage(currentPage - 1);
+          return; // 状态变化会触发重新获取
+        }
+
+        setProducts(fetchedProducts);
+        setPagination(fetchedPagination);
+      } catch (error) {
+        console.error("Fetch products error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentPage, search, minPrice, maxPrice, selectedTag, sortBy]
+  );
 
   // 筛选条件变化时重新获取
   useEffect(() => {
@@ -137,7 +156,7 @@ export default function ProductsContainer({
 
   const handleSortChange = (value: SortOption) => {
     setSortBy(value);
-    setCurrentPage(1);
+    // 排序变化时保持当前页码，不重置
   };
 
   const handlePriceChange = (type: "min" | "max", value: string) => {
@@ -147,112 +166,6 @@ export default function ProductsContainer({
       setMaxPrice(value);
     }
     setCurrentPage(1);
-  };
-
-  // 分页器渲染
-  const renderPagination = () => {
-    if (pagination.totalPages <= 1) return null;
-
-    const getPageNumbers = () => {
-      const pages: (number | "...")[] = [];
-      const maxVisible = 5;
-
-      if (pagination.totalPages <= maxVisible) {
-        for (let i = 1; i <= pagination.totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        if (currentPage <= 3) {
-          pages.push(1, 2, 3, 4, "...", pagination.totalPages);
-        } else if (currentPage >= pagination.totalPages - 2) {
-          pages.push(
-            1,
-            "...",
-            pagination.totalPages - 3,
-            pagination.totalPages - 2,
-            pagination.totalPages - 1,
-            pagination.totalPages
-          );
-        } else {
-          pages.push(
-            1,
-            "...",
-            currentPage - 1,
-            currentPage,
-            currentPage + 1,
-            "...",
-            pagination.totalPages
-          );
-        }
-      }
-
-      return pages;
-    };
-
-    return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
-        <p className="text-sm text-muted-foreground">
-          {tPagination("info", {
-            total: pagination.total,
-            page: currentPage,
-            totalPages: pagination.totalPages,
-          })}
-        </p>
-
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage <= 1 || isLoading}
-            className="h-9 px-3 rounded-lg"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1">{tPagination("prev")}</span>
-          </Button>
-
-          <div className="flex items-center gap-1 mx-2">
-            {getPageNumbers().map((pageNum, index) =>
-              pageNum === "..." ? (
-                <span
-                  key={`ellipsis-${index}`}
-                  className="px-2 text-muted-foreground"
-                >
-                  ...
-                </span>
-              ) : (
-                <Button
-                  key={pageNum}
-                  variant={currentPage === pageNum ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentPage(pageNum)}
-                  disabled={isLoading}
-                  className={cn(
-                    "h-9 w-9 p-0 rounded-lg",
-                    currentPage === pageNum
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  {pageNum}
-                </Button>
-              )
-            )}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage >= pagination.totalPages || isLoading}
-            className="h-9 px-3 rounded-lg"
-          >
-            <span className="hidden sm:inline mr-1">{tPagination("next")}</span>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -360,7 +273,14 @@ export default function ProductsContainer({
       </div>
 
       {/* 分页 */}
-      {renderPagination()}
+      <DataPagination
+        page={currentPage}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        isLoading={isLoading}
+        onPageChange={setCurrentPage}
+      />
 
       {/* 新建商品弹窗 */}
       <ProductFormDialog
